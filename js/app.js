@@ -677,15 +677,21 @@ const h = location.hash.slice(1); showTab(screens[h] ? h : 'map'); setTimeout(()
 function onboarding() {
   if (LS.get('lm-onboarded', false)) return;
   const slides = [
-    { ic: ICON.palace, t: '가까운 랜드마크를 찾아요', d: '한국관광 100선, 100대 명산, 국립공원이 지도에 있어요. 가고 싶은 곳을 눌러 길찾기까지.' },
-    { ic: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>', t: '도착하면 꾹 눌러 도장', d: '반경 안에 들어가면 버튼이 켜져요. 손가락을 떼면 쿵, 하고 도장이 찍혀요.' },
-    { ic: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5l6 2 4-2 6 2v14l-6-2-4 2z"/><path d="M10 7v12M14 5v12"/></svg>', t: '하루가 여행으로 모여요', d: '같은 날 찍은 도장은 여행으로 묶이고, 어떻게 다녔는지 적어 다른 사람에게 가이드로 나눌 수 있어요.' },
+    { ic: ICON.palace, t: '가까운 명소를 찾아봐요' },
+    { ic: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>', t: '도착하면 꾹 눌러 도장' },
+    { ic: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.4 6.8 19.1l1-5.8L3.5 9.2l5.9-.9z"/></svg>', t: '전국 명소를 방문해<br>뱃지를 받아보세요!' },
   ]; let i = 0;
   const el = document.createElement('div'); el.className = 'onb'; document.getElementById('app').appendChild(el);
-  const render = () => { const s = slides[i]; el.innerHTML = `<div class="onb-in"><div class="onb-ic">${s.ic}</div><h2>${s.t}</h2><p>${s.d}</p><div class="dots">${slides.map((_, k) => `<i class="${k === i ? 'on' : ''}"></i>`).join('')}</div>
-    ${i < slides.length - 1 ? `<button class="btn primary" type="button" id="onbNext">다음</button><button class="btn ghost" type="button" id="onbSkip">건너뛰기</button>` : `<button class="btn primary" type="button" id="onbGo">내 위치 켜고 시작</button><p class="note">위치는 도장을 찍을 때 반경 확인에만 써요. 서버에 보내지 않고, 지도를 열 자리만 이 기기에 남겨요.</p><button class="btn ghost" type="button" id="onbSkip">위치 없이 둘러보기</button>`}</div>${i > 0 ? '<button class="onb-back" type="button" id="onbBack" aria-label="이전"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>' : ''}`;
-    const done = gps => { LS.set('lm-onboarded', true); el.remove(); if (gps) $('#gpsBtn').click(); };
-    const n = el.querySelector('#onbNext'); if (n) n.onclick = () => { i++; render(); }; const bk = el.querySelector('#onbBack'); if (bk) bk.onclick = () => { i--; render(); }; const g = el.querySelector('#onbGo'); if (g) g.onclick = () => done(true); el.querySelector('#onbSkip').onclick = () => done(false); };
+  const done = gps => { LS.set('lm-onboarded', true); el.remove(); if (gps) $('#gpsBtn').click(); };
+  const go = k => { i = Math.max(0, Math.min(slides.length - 1, k)); render(); };
+  const render = () => { const s = slides[i], last = i === slides.length - 1; el.innerHTML = `<div class="onb-in"><div class="onb-ic">${s.ic}</div><h2>${s.t}</h2><div class="dots">${slides.map((_, k) => `<i data-k="${k}" class="${k === i ? 'on' : ''}"></i>`).join('')}</div>
+    ${last ? `<button class="btn primary" type="button" id="onbGo">시작하기</button>` : `<button class="btn primary" type="button" id="onbNext">다음</button>`}<button class="btn ghost" type="button" id="onbSkip">${last ? '위치 없이 둘러보기' : '건너뛰기'}</button></div>
+    ${i > 0 ? '<button class="onb-back" type="button" id="onbBack" aria-label="이전"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>' : ''}`;
+    const n = el.querySelector('#onbNext'); if (n) n.onclick = () => go(i + 1); const bk = el.querySelector('#onbBack'); if (bk) bk.onclick = () => go(i - 1);
+    const g = el.querySelector('#onbGo'); if (g) g.onclick = () => done(true); el.querySelector('#onbSkip').onclick = () => done(false);
+    el.querySelectorAll('.dots i').forEach(d => d.onclick = () => go(+d.dataset.k)); };
+  /* 좌우로 밀어서도 넘기고 돌아온다 */
+  let sx = null; el.addEventListener('pointerdown', e => { sx = e.clientX; }); el.addEventListener('pointerup', e => { if (sx === null) return; const dx = e.clientX - sx; sx = null; if (Math.abs(dx) < 50) return; go(dx < 0 ? i + 1 : i - 1); });
   render();
 }
 onboarding();
