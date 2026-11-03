@@ -12,11 +12,13 @@ const noise = seed => { const g = Array.from({ length: 64 }, (_, i) => { const v
 function drawSeal(ctx, { x, y, R, short, date, angle, seed }) {
   const nz = noise(seed); ctx.save(); ctx.translate(x, y); ctx.rotate(angle);
   ctx.beginPath(); for (let k = 0; k <= 96; k++) { const a = k / 96 * Math.PI * 2, w = 1 + (nz(a) - .5) * 0.07; const px = Math.cos(a) * R * w, py = Math.sin(a) * R * w; k ? ctx.lineTo(px, py) : ctx.moveTo(px, py); } ctx.closePath();
-  ctx.lineWidth = R * 0.105; ctx.strokeStyle = '#C8372D'; ctx.globalAlpha = 0.92; ctx.stroke();
-  ctx.fillStyle = '#C8372D'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.font = `700 ${Math.round(R * (short.length >= 3 ? 0.5 : 0.64))}px "Do Hyeon","Nanum Myeongjo",serif`; ctx.fillText(short, 0, -R * 0.07);
-  ctx.font = `600 ${Math.round(R * 0.17)}px "IBM Plex Sans KR",sans-serif`; ctx.fillText(date, 0, R * 0.48);
-  ctx.globalCompositeOperation = 'destination-out'; const rnd = noise(seed + 3); for (let i = 0; i < 60; i++) { const a = i / 60 * Math.PI * 2 * 7.3, rr = R * (0.2 + rnd(a) * 0.8); ctx.globalAlpha = rnd(a * 1.7) * 0.5; ctx.beginPath(); ctx.arc(Math.cos(a) * rr, Math.sin(a) * rr, R * 0.025, 0, Math.PI * 2); ctx.fill(); }
+  /* 사진 위에서도 또렷하게: 쨍한 빨강 + 흰 테두리, 얼룩 점 없음 */
+  const RED = '#E6332A'; ctx.lineJoin = 'round';
+  ctx.lineWidth = R * 0.16; ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.stroke(); ctx.lineWidth = R * 0.1; ctx.strokeStyle = RED; ctx.stroke();
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const txt = (t, font, y) => { ctx.font = font; ctx.lineWidth = R * 0.05; ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.strokeText(t, 0, y); ctx.fillStyle = RED; ctx.fillText(t, 0, y); };
+  txt(short, `700 ${Math.round(R * (short.length >= 3 ? 0.5 : 0.64))}px "Do Hyeon","Nanum Myeongjo",serif`, -R * 0.1);
+  txt(date, `700 ${Math.round(R * 0.19)}px "IBM Plex Sans KR",sans-serif`, R * 0.42);
   ctx.restore();
 }
 

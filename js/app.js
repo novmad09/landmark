@@ -18,17 +18,35 @@ function ask({ title, text, yes, no, input, value }) { return new Promise(res =>
 
 if (localStorage.getItem('lm-test') !== null) cfg.testMode = LS.get('lm-test', cfg.testMode); // 내 정보에서 켜고 끈 값
 const store = await window.Store.create(); window.Store.TripPhotos.gc().catch(() => {});
-const mapS = window.MapScreen.init({ store, toast, onStamp: startStamp, onDetail: openDetail, onAddTrip: p => addToTrip(p), onPhoto: (p, stamped) => stamped ? pickPhoto(p.id) : toast('도장을 찍은 곳에만 사진을 올릴 수 있어요'), onGallery: p => openGallery(p.id, 0),
+const mapS = window.MapScreen.init({ store, toast, onStamp: startStamp, onDetail: openDetail, onAddTrip: p => addToTrip(p), onPhoto: (p, stamped) => stamped ? pickPhoto(p.id) : toast('도장을 찍은 곳에만 사진을 올릴 수 있어요'), onUndo: () => { if (!screens.dogam.hidden) renderDogam(); }, onGallery: p => openGallery(p.id, 0),
   onNear: p => { try { navigator.vibrate && navigator.vibrate([60, 40, 60]); } catch (e) {} toast(`${p.name} 도장을 찍을 수 있어요`, { action: '찍기', onAction: () => { showTab('map'); mapS.focus(p.id); } });
     if (document.hidden && 'Notification' in window && Notification.permission === 'granted') { try { new Notification('랜드마크 도장', { body: `${p.name} 근처예요. 도장을 찍어 보세요`, tag: 'near' }); } catch (e) {} } } });
 const ICON = mapS.ICON, fmt = mapS.fmt;
 
 /* ---------- 탭 ---------- */
 const screens = { map: $('#scrMap'), dogam: $('#scrDogam'), guide: $('#scrGuide'), me: $('#scrMe') };
-function showTab(name) { Object.entries(screens).forEach(([k, el]) => el.hidden = k !== name);
+function showTab(name) { Object.entries(screens).forEach(([k, el]) => el.hidden = k !== name); if (name !== 'map' && mapS) mapS.closeSheet(); /* 다른 탭으로 가면 명소 시트는 닫는다 */
   document.querySelectorAll('nav.tabs button').forEach(b => { if (b.dataset.tab === name) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
-  if (name === 'dogam') renderDogam(); if (name === 'guide') renderGuide(); if (name === 'me') renderMe(); if (name === 'map') mapS.resize(); if (location.hash !== '#' + name) history.replaceState(null, '', '#' + name); }
+  if (name === 'dogam') renderDogam(); if (name === 'guide') renderGuide(); if (name === 'me') renderMe(); if (name === 'map') mapS.resize(); if (location.hash !== '#' + name) { if (name === 'map') history.replaceState({ tab: name }, '', '#map'); else history.pushState({ tab: name }, '', '#' + name); } }
 document.querySelectorAll('nav.tabs button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
+/* 안드로이드 '뒤로' 버튼: 열린 화면(상세·사진·편집기·대화상자)을 하나씩 닫고, 다 닫히면 지도 탭으로, 지도에서 한 번 더 누르면 앱이 내려간다 */
+const Back = (() => {
+  const OV = '.login, .stampscr, .viewer, .pedit, .onb, .detail';
+  let depth = 0, skip = 0;
+  const isOv = n => n.nodeType === 1 && n.id !== 'detail' && n.matches(OV); /* #detail 은 class 로 따로 본다 */
+  const opened = () => { depth++; history.pushState({ ov: depth }, ''); };
+  const closed = () => { if (depth <= 0) return; depth--; if (history.state && history.state.ov > depth) { skip++; history.back(); } };
+  const closeTop = () => { const list = [...document.querySelectorAll(OV)].filter(e => e.id !== 'detail' || e.classList.contains('open')); const top = list[list.length - 1]; if (!top) { const sh = document.getElementById('sheet'); if (sh.classList.contains('open')) { mapS.closeSheet(); return true; } return false; }
+    if (top.id === 'detail') { closeDetail(); return true; }
+    const btn = top.querySelector('#askNo, #pkNo, #rpNo, #peX, #onbSkip, .cancel, .x, .x2, .back'); if (btn) btn.click(); else top.remove(); return true; };
+  new MutationObserver(ms => ms.forEach(m => { m.addedNodes.forEach(n => { if (isOv(n)) opened(); }); m.removedNodes.forEach(n => { if (isOv(n)) closed(); });
+  })).observe(document.getElementById('app'), { childList: true });
+  const watchOpen = id => new MutationObserver(ms => ms.forEach(m => { const t = m.target; if (t.classList.contains('open')) { if (!t._ov) { t._ov = true; opened(); } } else if (t._ov) { t._ov = false; closed(); } })).observe(document.getElementById(id), { attributes: true, attributeFilter: ['class'] });
+  watchOpen('detail'); watchOpen('sheet');
+  window.addEventListener('popstate', () => { if (skip > 0) { skip--; return; } if (depth > 0) { if (!closeTop()) depth = 0; return; } /* 닫히면 observer 가 depth 를 줄인다 */
+    const cur = document.querySelector('nav.tabs button[aria-current]'); if (cur && cur.dataset.tab !== 'map') showTab('map'); });
+  return { reset() { depth = 0; } };
+})();
 addEventListener('hashchange', () => { const h = location.hash.slice(1); if (screens[h]) showTab(h); });
 
 /* ---------- 로그인 ---------- */
@@ -137,7 +155,7 @@ function renderDogam() {
     $('#dgGroup').innerHTML = `<select id="dgGroupSel" aria-label="묶어 보기">${groups.map(([k, l]) => `<option value="${k}" ${DG.group === k ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
     $('#dgGroupSel').onchange = e => { DG.group = e.target.value; renderDogam(); };
   }
-  const cell = ({ p, s }) => `<button class="cell ${s ? 'visited' : ''} ${DG.selecting && DG.sel.has(p.id) ? 'picked' : ''}" type="button" data-id="${p.id}" style="--c:var(--c-${p.cat})"><span class="st">${ICON[p.cat]}</span><span class="n">${p.name}</span><span class="r">${p.sido} ${p.gu}</span>${DG.sort === 'near' ? `<span class="d">${fmt(window.Store.dist(myPos(), p))}${s ? ' · 다녀옴' : ''}</span>` : s ? `<span class="d">${dotDate(s.last)}${s.count > 1 ? ` · ${s.count}회` : ''}</span>` : '<span class="d empty">미방문</span>'}</button>`;
+  const cell = ({ p, s }) => `<button class="cell ${s ? 'visited' : ''} ${DG.selecting && DG.sel.has(p.id) ? 'picked' : ''}" type="button" data-id="${p.id}" style="--c:var(--c-${p.cat})"><span class="st">${ICON[p.cat]}</span><span class="n">${p.name}</span><span class="r">${p.sido} ${p.gu}</span>${DG.sort === 'near' ? `<span class="d">${fmt(window.Store.dist(myPos(), p))}${s ? ' · 다녀옴' : ''}</span>` : s ? `<span class="d">${dotDate(s.last)}${s.count > 1 ? ` · ${s.count}회` : ''}</span>` : ''}</button>`;
   const gcard = (g) => { const done = g.items.filter(x => x.s).length, total = g.total ?? g.items.length; const pct = total ? Math.round(done / total * 100) : 0; const bar = g.kind === 'plan' || (!mine && g.kind !== 'trip' && g.kind !== 'rest');
     return `<button type="button" class="grp ${g.kind || ''}" data-grp="${g.key}"><div class="grp-h"><div class="grp-t"><b>${esc(g.title)}</b>${g.badge ? `<em>${g.badge}</em>` : ''}</div><span class="grp-n">${bar ? `${done}/${total}` : `${done}곳`}</span></div>${g.sub ? `<div class="grp-s">${esc(g.sub)}</div>` : ''}${bar ? `<div class="grp-bar"><i style="width:${pct}%"></i></div>` : ''}<div class="grp-th">${g.items.slice(0, 5).map(x => `<span class="${x.s ? 'on' : ''}" style="--c:var(--c-${x.p.cat})">${ICON[x.p.cat]}</span>`).join('')}${g.items.length > 5 ? `<span class="more">+${g.items.length - 5}</span>` : ''}<span class="grp-names">${g.items.slice(0, 3).map(x => x.p.name).join(' · ')}${g.items.length > 3 ? ' …' : ''}</span></div></button>`; };
   let groupsOut = [], html = '';
@@ -175,7 +193,7 @@ function renderDogam() {
   bindCells($('#dgBody'));
   $('#dgBody').querySelectorAll('.grp').forEach(b => b.onclick = () => openGroup(groupsOut.find(g => g.key === b.dataset.grp)));
   LS.set('lm-dg', Object.fromEntries(DGSAVE.map(k => [k, DG[k]])));
-  $('#dgSelBar').hidden = !DG.selecting; const tb = $('#dgTripBtn'); tb.hidden = tripsV || DG.selecting || (mine && !visited); tb.textContent = '내 여행 만들기'; $('#dgTripName').placeholder = mine ? '여행 이름 (예: 2026 가을 경주)' : '계획 이름 (예: 다음 달 강릉)';
+  $('#dgSelBar').hidden = !DG.selecting; const tb = $('#dgTripBtn'); tb.hidden = tripsV || DG.selecting || mine; /* 다녀온 곳에서는 '내 여행' 탭이 있으니 숨긴다 */ tb.textContent = '내 여행 만들기'; $('#dgTripName').placeholder = mine ? '여행 이름 (예: 2026 가을 경주)' : '계획 이름 (예: 다음 달 강릉)';
   $('#dgProg').hidden = tripsV;
 }
 /* 내 여행 만들기: 다녀온 곳으로 여행을 만들지, 가고 싶은 곳으로 계획을 만들지 */
@@ -266,11 +284,11 @@ $('#dgTripSave').onclick = () => { if (!DG.sel.size) { toast('한 곳 이상 골
 async function addToTrip(p) {
   const mine = Trips.all().filter(t => !t.auto);
   const el = document.createElement('div'); el.className = 'login pick';
-  el.innerHTML = `<div class="box"><h2>어디에 담을까요?</h2><p>${p.name}</p><div class="picklist">${mine.map(t => `<button type="button" class="pk" data-t="${t.id}" ${t.ids.includes(p.id) ? 'disabled' : ''}><b>${esc(t.name)}</b><small>${t.kind === 'plan' ? '계획' : '여행'} · ${t.ids.length}곳${t.ids.includes(p.id) ? ' · 이미 있어요' : ''}</small></button>`).join('')}<button type="button" class="pk new" data-t="new"><b>+ 새 계획 만들기</b><small>이름을 정하고 여기부터 담아요</small></button></div><button class="btn ghost" type="button" id="pkNo">취소</button></div>`;
+  el.innerHTML = `<div class="box"><h2>어디에 담을까요?</h2><p>${p.name}</p><div class="picklist">${mine.map(t => `<button type="button" class="pk" data-t="${t.id}" ${t.ids.includes(p.id) ? 'disabled' : ''}><b>${esc(t.name)}</b><small>${t.kind === 'plan' ? '계획' : '여행'} · ${t.ids.length}곳${t.ids.includes(p.id) ? ' · 이미 있어요' : ''}</small></button>`).join('')}<button type="button" class="pk new" data-t="new"><b>+ 새 여행 만들기</b><small>이름을 정하고 여기부터 담아요</small></button></div><button class="btn ghost" type="button" id="pkNo">취소</button></div>`;
   document.getElementById('app').appendChild(el);
   el.onclick = e => { if (e.target === el) el.remove(); }; el.querySelector('#pkNo').onclick = () => el.remove();
   el.querySelectorAll('[data-t]').forEach(b => b.onclick = async () => { const tid = b.dataset.t; el.remove();
-    if (tid === 'new') { const n = await ask({ title: '새 계획 이름', input: '예: 다음 달 강릉', value: `${p.gu.replace(/(시|군|구)$/, '')} 가볼 곳`, yes: '만들기', no: '취소' }); if (!n) return; const t = Trips.add(n, [p.id], 'plan'); toast(`'${t.name}'에 담았어요`, { action: '보기', onAction: () => { DG.view = 'trips'; DG.tripKind = 'plan'; showTab('dogam'); } }); return; }
+    if (tid === 'new') { const n = await ask({ title: '여행 이름', input: '예: 다음 달 강릉', value: `${p.gu.replace(/(시|군|구)$/, '')} 가볼 곳`, yes: '만들기', no: '취소' }); if (!n) return; const t = Trips.add(n, [p.id], 'plan'); toast(`'${t.name}'에 담았어요`, { action: '보기', onAction: () => { DG.view = 'trips'; DG.tripKind = 'plan'; showTab('dogam'); } }); return; }
     const t = Trips.all().find(x => x.id === tid); if (!t) return; Trips.update(t.id, { ids: [...t.ids, p.id] }); toast(`'${t.name}'에 담았어요`, { action: '보기', onAction: () => { DG.view = 'trips'; DG.tripKind = t.kind; showTab('dogam'); } }); if (!screens.dogam.hidden) renderDogam(); });
 }
 
@@ -523,17 +541,19 @@ function rateGuide(gid) { return new Promise(res => {
 let detailId = null, photoSort = 'likes';
 function openDetail(id) {
   detailId = id; const p = byId(id), s = store.stampsOf(id), photos = store.photosOf(id), cover = store.coverOf(id), pos = mapS.pos(), d = pos ? window.Store.dist(pos, p) : null;
-  const sorted = photoSort === 'new' ? [...photos].sort((x, y) => y.createdAt.localeCompare(x.createdAt)) : photos;
+  const uid = (store.getUser() || {}).id; const isMine = ph => ph.userId === uid;
+  const sorted = (photoSort === 'new' ? [...photos].sort((x, y) => y.createdAt.localeCompare(x.createdAt)) : [...photos]).sort((x, y) => isMine(y) - isMine(x)); /* 내 사진이 먼저 */
+  const myLatest = sorted.find(isMine); const hero = cover || myLatest || null;
   const el = $('#detail'); el.style.setProperty('--c', `var(--c-${p.cat})`);
   const md = (window.MEDIA || {})[id]; const nPh = photos.length + (md && md.img ? 1 : 0);
   const okStamp = cfg.testMode || (d !== null && d - Math.min(pos.accuracy || 0, cfg.maxAccuracy) <= p.r); const today = s && s.last === kstToday();
-  el.innerHTML = `<div class="hero" id="dHero" role="button" tabindex="0" aria-label="사진 크게 보기">${cover ? `<img src="${cover.url}" alt="${p.name}">` : md && md.img ? `<img src="${md.img}" alt="${p.name}">` : ICON[p.cat].replace('<svg ', '<svg class="big" ').replace('stroke-width="1.8"', 'stroke-width="1.2"')}<button class="back" type="button" aria-label="뒤로"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button><span class="credit">${cover ? `사진 · ${esc(cover.nickname)} · 👍 ${cover.likes}` : md && md.img ? `사진 · ${md.credit ? md.credit.slice(0, 24) + ' · ' : ''}${md.lic || ''} · 위키미디어` : '대표사진 없음 · 첫 사진을 올려 보세요'}</span>${nPh > 1 ? `<span class="cnt">${nPh}장</span>` : ''}</div>
+  el.innerHTML = `<div class="hero" id="dHero" role="button" tabindex="0" aria-label="사진 크게 보기">${hero ? `<img src="${hero.url}" alt="${p.name}">` : md && md.img ? `<img src="${md.img}" alt="${p.name}">` : ICON[p.cat].replace('<svg ', '<svg class="big" ').replace('stroke-width="1.8"', 'stroke-width="1.2"')}<button class="back" type="button" aria-label="뒤로"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button><span class="credit">${hero ? (isMine(hero) ? '내 사진' : `사진 · ${esc(hero.nickname)} · 👍 ${hero.likes}`) : md && md.img ? `사진 · ${md.credit ? md.credit.slice(0, 24) + ' · ' : ''}${md.lic || ''} · 위키미디어` : '대표사진 없음 · 첫 사진을 올려 보세요'}</span>${nPh > 1 ? `<span class="cnt">${nPh}장</span>` : ''}</div>
   <div class="body">
     <h2>${p.name}</h2>
     <div class="meta"><span>${p.sido} ${p.gu}</span>${(p.sets || []).map(id => `<span class="set">${setName(id)}</span>`).join('')}<span>${CATS[p.cat].emoji} ${CATS[p.cat].name}</span>${p.alt ? `<span>해발 ${p.alt.toLocaleString()}m</span>` : ''}${d !== null ? `<span>${fmt(d)}</span>` : ''}<button type="button" class="chip sm" id="dMap">지도에서 보기</button></div>
     ${(() => { const sp = mapS.splitDesc(p.desc); return (sp.spot ? `<p class="spot">📍 인증 지점 · ${sp.spot}</p>` : '') + `<p class="desc">${md && md.desc ? md.desc : sp.body}</p>`; })()}${md && md.desc ? `<p class="srcnote">${p.desc.replace(/^\[[^\]]*\]\s*/, '')} · 설명 출처 <a href="${md.page}" target="_blank" rel="noopener">위키백과</a> (CC BY-SA)</p>` : ''}
     <div class="sealrow ${okStamp || today ? '' : 'faraway'}"><button class="sealbtn ${today ? 'stamped' : ''}" id="dStamp" type="button" ${!okStamp || today ? 'disabled' : ''}><span class="ring"><b>${today ? `${p.name.replace(/\s.*/, '').slice(0, 3)}<br><small>${kstToday().slice(5).replace('-', '.')}</small>` : '도장<br>꾹!'}</b></span></button><div class="visit">${s ? `<b>방문 ${s.count}회</b><br>${s.first === s.last ? `${dotDate(s.first)} 다녀옴` : `첫 방문 ${dotDate(s.first)} · 최근 ${dotDate(s.last)}`}` : `아직 도장이 없어요.${d !== null && !okStamp ? `<br>여기서 <b>${fmt(d)}</b>` : ''}`}</div></div>
-    <div class="gal"><h3>사진 <small>${photos.length}장</small><span class="sortbtns" ${photos.length < 2 ? 'hidden' : ''}><button type="button" class="chip sm" data-sort="new" aria-pressed="${photoSort === 'new'}">최신순</button><button type="button" class="chip sm" data-sort="likes" aria-pressed="${photoSort === 'likes'}">추천순</button></span></h3>${photos.length ? `<div class="pgrid">${sorted.map((ph) => `<button type="button" data-ph="${ph.id}"><img src="${ph.url}" alt="" loading="lazy">${cover && ph.id === cover.id ? '<span class="top">대표</span>' : ''}<span class="lk">👍 ${ph.likes}</span></button>`).join('')}</div>` : `<div class="empty">${s ? '도장을 찍으셨네요. 첫 사진을 남겨 보세요.' : '도장을 찍은 분만 사진을 올릴 수 있어요.'}</div>`}</div>
+    <div class="gal"><h3>사진 <small>${photos.length}장</small><span class="sortbtns" ${photos.length < 2 ? 'hidden' : ''}><button type="button" class="chip sm" data-sort="new" aria-pressed="${photoSort === 'new'}">최신순</button><button type="button" class="chip sm" data-sort="likes" aria-pressed="${photoSort === 'likes'}">추천순</button></span></h3>${photos.length ? `<div class="pgrid">${sorted.map((ph) => `<button type="button" data-ph="${ph.id}"><img src="${ph.url}" alt="" loading="lazy">${isMine(ph) ? '<span class="top mine">내 사진</span>' : cover && ph.id === cover.id ? '<span class="top">대표</span>' : ''}<span class="lk">👍 ${ph.likes}</span></button>`).join('')}</div>` : `<div class="empty">${s ? '도장을 찍으셨네요. 첫 사진을 남겨 보세요.' : '도장을 찍은 분만 사진을 올릴 수 있어요.'}</div>`}</div>
   </div>
   <div class="fixed act3"><a class="btn" href="${mapS.routeUrl(p)}" target="_blank" rel="noopener">길찾기</a><button class="btn ${s ? '' : 'dim'}" type="button" id="dPhoto">사진 남기기</button><button class="btn" type="button" id="dAdd">내 여행에 담기</button></div>`;
   el.classList.add('open'); el.setAttribute('aria-hidden', 'false'); el.scrollTop = 0; document.getElementById('app').appendChild(el); // 묶음 상세 위에 뜨도록 맨 뒤로

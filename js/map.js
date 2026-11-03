@@ -57,7 +57,7 @@ function paintRegions() { if (!map.getSource('regions')) return; const g = regio
   Object.entries(g).forEach(([c, s]) => { if (s.done === s.total) done.push(c); else if (s.done > 0) part.push(c); });
   map.setFilter('region-done', ['in', ['get', 'code'], ['literal', done]]); map.setFilter('region-done-line', ['in', ['get', 'code'], ['literal', done]]); map.setFilter('region-part', ['in', ['get', 'code'], ['literal', part]]); }
 
-let map, store, S, mapEl, ov, pool = new Map(), meEl, raf = null, movedFlag = false, onStamp, onDetail, onNear, onAddTrip, onPhoto, onGallery, onLoginNeeded;
+let map, store, S, mapEl, ov, pool = new Map(), meEl, raf = null, movedFlag = false, onStamp, onDetail, onNear, onAddTrip, onPhoto, onGallery, onLoginNeeded, onUndo, toastFn;
 /* 반경 진입 알림 (앱이 열려 있을 때). 같은 곳은 30분에 한 번만 */
 const nearSeen = {};
 function nearCheck() { if (!S.me || !onNear) return; const now = Date.now(); const today = window.Store.kstToday();
@@ -152,12 +152,14 @@ function select(id) {
   cover.innerHTML = (ph ? `<img src="${ph.url}" alt="">` : md && md.img ? `<img src="${md.img}" alt="" loading="lazy">` : ICON[p.cat].replace('<svg ', '<svg class="big" ').replace('stroke-width="1.8"', 'stroke-width="1.3"')) + `<span class="tag">${CATS[p.cat].emoji} ${CATS[p.cat].name}</span>` + (nPh || (md && md.img) ? `<span class="tag r">${ph ? `👍 ${ph.likes} · ${nPh}장` : '위키미디어'}</span>` : '') + (s ? `<div class="pop">${p.name.replace(/\s.*/, '').slice(0, 3)}<br>방문</div>` : '');
   document.getElementById('sName').textContent = p.name; document.getElementById('sRegion').textContent = `${p.sido} ${p.gu}`; document.getElementById('sSets').innerHTML = (p.sets || []).map(id => `<span class="set">${setName(id)}</span>`).join('');
   document.getElementById('sDist').textContent = d === null ? '내 위치 꺼짐' : `내 위치에서 ${fmt(d)}`; { const sp = splitDesc(p.desc); const body = (md && md.desc) ? md.desc.slice(0, 120) + (md.desc.length > 120 ? '…' : '') : sp.body; document.getElementById('sDesc').innerHTML = (sp.spot ? `<span class="spot">📍 인증 지점 · ${sp.spot}</span>` : '') + body.replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
-  const vEl = document.getElementById('sVisit'); vEl.innerHTML = s ? `<b>방문 ${s.count}회</b> · 첫 방문 ${s.first.replaceAll('-', '.')} · 최근 ${s.last.replaceAll('-', '.')}` : '아직 도장이 없어요';
+  const vEl = document.getElementById('sVisit'); const canUndo = today && (cfg.testMode || (d !== null && inRange(p)));
+  vEl.hidden = !s; vEl.innerHTML = !s ? '' : today ? `<b>오늘 찍었어요</b>${s.count > 1 ? ` · 방문 ${s.count}회` : ''}${canUndo ? ' <button type="button" class="linkbtn" id="sUndo">잘못 찍었어요 · 취소</button>' : ''}` : `<b>방문 ${s.count}회</b> · ${s.first === s.last ? `${s.last.replaceAll('-', '.')} 다녀옴` : `최근 ${s.last.replaceAll('-', '.')}`}`;
+  const su = document.getElementById('sUndo'); if (su) su.onclick = async () => { if (!confirm(`${p.name} 오늘 도장을 취소할까요?`)) return; const r = await store.unstamp(p.id); if (!r.ok) { toastFn(r.reason); return; } toastFn('도장을 취소했어요'); renderUI(); select(p.id); paintRegions(); dirty(); onUndo && onUndo(p); };
   const b = document.getElementById('stampBtn'), why = document.getElementById('sWhy'), go = document.getElementById('sGo');
   const near = cfg.testMode || today || d === null || d <= Math.max(p.r, 2000); // 2km 안이면 '찍으러 온 사람'
   sheet().classList.toggle('faraway', !near);
-  b.disabled = !ok || today;
-      why.textContent = today ? '같은 곳은 하루에 한 번 찍을 수 있어요.'
+  b.disabled = !ok || today; b.classList.toggle('stamped', !!today); b.querySelector('b').innerHTML = today ? `${p.name.replace(/\s.*/, '').slice(0, 3)}<br><small>${window.Store.kstToday().slice(5).replace('-', '.')}</small>` : '도장<br>꾹!';
+      why.textContent = today ? ''
     : cfg.testMode ? '테스트 모드 · 어디서나 찍혀요'
     : d === null ? '내 위치를 켜면 반경 안에서 도장을 찍을 수 있어요.'
     : !S.accuracyOk && d <= p.r ? 'GPS 신호가 약해요. 하늘이 보이는 곳에서 잠시 기다려 주세요.'
@@ -254,7 +256,7 @@ function startGPS(first) {
 
 /* ---------- 초기화 ---------- */
 function init(opts) {
-  store = opts.store; onStamp = opts.onStamp; onDetail = opts.onDetail; onNear = opts.onNear; onAddTrip = opts.onAddTrip; onPhoto = opts.onPhoto; onGallery = opts.onGallery;
+  store = opts.store; onStamp = opts.onStamp; onDetail = opts.onDetail; onNear = opts.onNear; onAddTrip = opts.onAddTrip; onPhoto = opts.onPhoto; onGallery = opts.onGallery; onUndo = opts.onUndo; toastFn = opts.toast || (() => {});
   mapEl = document.getElementById('map'); ov = document.getElementById('ov');
   let last = null; try { last = JSON.parse(localStorage.getItem('lm-lastpos')); } catch (e) {}
   S = { me: last, live: false, accuracyOk: false, sel: null, filter: { set: '', cat: '', sido: '', gu: '', seen: '' } };
