@@ -151,7 +151,7 @@ function select(id) {
   const nPh = store.photosOf(id).length;
   cover.innerHTML = (ph ? `<img src="${ph.url}" alt="">` : md && md.img ? `<img src="${md.img}" alt="" loading="lazy">` : ICON[p.cat].replace('<svg ', '<svg class="big" ').replace('stroke-width="1.8"', 'stroke-width="1.3"')) + `<span class="tag">${CATS[p.cat].emoji} ${CATS[p.cat].name}</span>` + (nPh || (md && md.img) ? `<span class="tag r">${ph ? `👍 ${ph.likes} · ${nPh}장` : '위키미디어'}</span>` : '') + (s ? `<div class="pop">${p.name.replace(/\s.*/, '').slice(0, 3)}<br>방문</div>` : '');
   document.getElementById('sName').textContent = p.name; document.getElementById('sRegion').textContent = `${p.sido} ${p.gu}`; document.getElementById('sSets').innerHTML = (p.sets || []).map(id => `<span class="set">${setName(id)}</span>`).join('');
-  document.getElementById('sDist').textContent = d === null ? '내 위치 꺼짐' : `내 위치에서 ${fmt(d)}`; document.getElementById('sDesc').textContent = (md && md.desc) ? md.desc.slice(0, 120) + (md.desc.length > 120 ? '…' : '') : p.desc;
+  document.getElementById('sDist').textContent = d === null ? '내 위치 꺼짐' : `내 위치에서 ${fmt(d)}`; { const sp = splitDesc(p.desc); const body = (md && md.desc) ? md.desc.slice(0, 120) + (md.desc.length > 120 ? '…' : '') : sp.body; document.getElementById('sDesc').innerHTML = (sp.spot ? `<span class="spot">📍 인증 지점 · ${sp.spot}</span>` : '') + body.replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
   const vEl = document.getElementById('sVisit'); vEl.innerHTML = s ? `<b>방문 ${s.count}회</b> · 첫 방문 ${s.first.replaceAll('-', '.')} · 최근 ${s.last.replaceAll('-', '.')}` : '아직 도장이 없어요';
   const b = document.getElementById('stampBtn'), why = document.getElementById('sWhy'), go = document.getElementById('sGo');
   const near = cfg.testMode || today || d === null || d <= Math.max(p.r, 2000); // 2km 안이면 '찍으러 온 사람'
@@ -226,6 +226,8 @@ function openFilter() {
 let watchId = null;
 function gpsMsg(t) { const el = document.getElementById('gpsMsg'); el.hidden = !t; el.textContent = t || ''; }
 let staleT = null;
+/* 설명 앞의 '[인증: 광화문 앞]'을 떼어낸다 */
+function splitDesc(d) { const m = /^\[인증:\s*([^\]]+)\]\s*/.exec(d || ''); return m ? { spot: m[1], body: (d || '').slice(m[0].length) } : { spot: '', body: d || '' }; }
 function startGPS(first) {
   const btn = document.getElementById('gpsBtn');
   if (!navigator.geolocation) { gpsMsg('이 기기는 위치를 지원하지 않아요'); return; }
@@ -257,7 +259,7 @@ function init(opts) {
   let last = null; try { last = JSON.parse(localStorage.getItem('lm-lastpos')); } catch (e) {}
   S = { me: last, live: false, accuracyOk: false, sel: null, filter: { set: '', cat: '', sido: '', gu: '', seen: '' } };
   map = new maplibregl.Map({ container: 'gl', style: styleWithSources(), center: last ? [last.lng, last.lat] : [127.0, 37.55], zoom: last ? 12.5 : 11, minZoom: 5.5, maxZoom: 18, dragRotate: false, pitchWithRotate: false,
-    attributionControl: { compact: true, customAttribution: '<a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> © <a href="https://www.openmaptiles.org/" target="_blank" rel="noopener">OpenMapTiles</a> · <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>' } });
+    attributionControl: { compact: true } }); /* 출처 문구는 타일 스타일에 들어 있다 (중복 방지) */
   map.touchZoomRotate.disableRotation(); map.keyboard.disableRotation(); 
   map.addControl(new maplibregl.ScaleControl({ unit: 'metric', maxWidth: 90 }), 'bottom-left');
   let errShown = false; map.on('error', e => { if (!errShown && /tile|source|fetch|network/i.test(String(e?.error?.message || ''))) { errShown = true; opts.toast('지도 데이터를 불러오지 못했어요. 인터넷 연결을 확인해 주세요'); } });
@@ -288,7 +290,7 @@ function init(opts) {
     const done = v => { ov.hidden = true; res(v); }; document.getElementById('pickNo').onclick = () => done(null); document.getElementById('pickOk').onclick = () => { const c = map.getCenter(); done({ lat: +c.lat.toFixed(6), lng: +c.lng.toFixed(6) }); }; }); },
   /* 지금 보고 있는 지역: 전국 보기면 전국, 시·도 보기면 시·도, 더 들어가 있으면 시·군·구 */
   region() { const md = mode(); if (md === 'nat' && !S.trip) return {}; const c = map.getCenter(); const near = L.map(p => ({ p, d: dist({ lat: c.lat, lng: c.lng }, p) })).sort((a, b) => a.d - b.d)[0]; if (!near || near.d > 80000) return {}; if (md === 'city') return { sido: near.p.sido }; const n = L.filter(p => p.sido === near.p.sido && p.gu === near.p.gu).length; return n >= 5 ? { sido: near.p.sido, gu: near.p.gu } : { sido: near.p.sido }; }, // 시·군·구에 5곳 미만이면 시·도로
-  setFilter(f) { Object.assign(S.filter, { set: '', cat: '', sido: '', gu: '', seen: '' }, f); renderFilterBtn(); renderUI(); for (const [k, e] of pool) { e.remove(); pool.delete(k); } dirty(); }, showTrip, refresh() { renderUI(); if (S.sel) select(S.sel); paintRegions(); dirty(); }, regionStats, select, closeSheet, focus(id) { const p = byId(id); map.flyTo({ center: [p.lng, p.lat], zoom: 14 }); select(id); }, resize() { map.resize(); dirty(); }, pos: () => S.me, ICON, fmt, routeUrl };
+  splitDesc, setFilter(f) { Object.assign(S.filter, { set: '', cat: '', sido: '', gu: '', seen: '' }, f); renderFilterBtn(); renderUI(); for (const [k, e] of pool) { e.remove(); pool.delete(k); } dirty(); }, showTrip, refresh() { renderUI(); if (S.sel) select(S.sel); paintRegions(); dirty(); }, regionStats, select, closeSheet, focus(id) { const p = byId(id); map.flyTo({ center: [p.lng, p.lat], zoom: 14 }); select(id); }, resize() { map.resize(); dirty(); }, pos: () => S.me, ICON, fmt, routeUrl };
 }
 return { init };
 })();
