@@ -57,7 +57,7 @@ function paintRegions() { if (!map.getSource('regions')) return; const g = regio
   Object.entries(g).forEach(([c, s]) => { if (s.done === s.total) done.push(c); else if (s.done > 0) part.push(c); });
   map.setFilter('region-done', ['in', ['get', 'code'], ['literal', done]]); map.setFilter('region-done-line', ['in', ['get', 'code'], ['literal', done]]); map.setFilter('region-part', ['in', ['get', 'code'], ['literal', part]]); }
 
-let map, store, S, mapEl, ov, pool = new Map(), meEl, raf = null, movedFlag = false, onStamp, onDetail, onNear, onAddTrip, onPhoto, onGallery, onLoginNeeded, onUndo, toastFn;
+let map, store, S, mapEl, ov, pool = new Map(), meEl, raf = null, movedFlag = false, onStamp, onDetail, onNear, onAddTrip, onPhoto, onGallery, onLoginNeeded, onUndo, onStampInfo, toastFn;
 /* 반경 진입 알림 (앱이 열려 있을 때). 같은 곳은 30분에 한 번만 */
 const nearSeen = {};
 function nearCheck() { if (!S.me || !onNear) return; const now = Date.now(); const today = window.Store.kstToday();
@@ -153,14 +153,13 @@ function select(id) {
   document.getElementById('sName').textContent = p.name; document.getElementById('sRegion').textContent = `${p.sido} ${p.gu}`; document.getElementById('sSets').innerHTML = (p.sets || []).map(id => `<span class="set">${setName(id)}</span>`).join('');
   document.getElementById('sDist').textContent = d === null ? '내 위치 꺼짐' : `내 위치에서 ${fmt(d)}`; { const sp = splitDesc(p.desc); const body = (md && md.desc) ? md.desc.slice(0, 120) + (md.desc.length > 120 ? '…' : '') : sp.body; document.getElementById('sDesc').innerHTML = (sp.spot ? `<span class="spot">📍 인증 지점 · ${sp.spot}</span>` : '') + body.replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
   const vEl = document.getElementById('sVisit'); const canUndo = today && (cfg.testMode || (d !== null && inRange(p)));
-  vEl.hidden = !s; vEl.innerHTML = !s ? '' : today ? `<b>오늘 찍었어요</b>${s.count > 1 ? ` · 방문 ${s.count}회` : ''}${canUndo ? ' <button type="button" class="linkbtn" id="sUndo">잘못 찍었어요 · 취소</button>' : ''}` : `<b>방문 ${s.count}회</b> · ${s.first === s.last ? `${s.last.replaceAll('-', '.')} 다녀옴` : `최근 ${s.last.replaceAll('-', '.')}`}`;
+  vEl.hidden = true; vEl.innerHTML = !s ? '' : today ? `<b>오늘 찍었어요</b>${s.count > 1 ? ` · 방문 ${s.count}회` : ''}${canUndo ? ' <button type="button" class="linkbtn" id="sUndo">잘못 찍었어요 · 취소</button>' : ''}` : `<b>방문 ${s.count}회</b> · ${s.first === s.last ? `${s.last.replaceAll('-', '.')} 다녀옴` : `최근 ${s.last.replaceAll('-', '.')}`}`;
   const su = document.getElementById('sUndo'); if (su) su.onclick = async () => { if (!confirm(`${p.name} 오늘 도장을 취소할까요?`)) return; const r = await store.unstamp(p.id); if (!r.ok) { toastFn(r.reason); return; } toastFn('도장을 취소했어요'); renderUI(); select(p.id); paintRegions(); dirty(); onUndo && onUndo(p); };
   const b = document.getElementById('stampBtn'), why = document.getElementById('sWhy'), go = document.getElementById('sGo');
   const near = cfg.testMode || today || d === null || d <= Math.max(p.r, 2000); // 2km 안이면 '찍으러 온 사람'
   sheet().classList.toggle('faraway', !near);
-  b.disabled = !ok || today; b.classList.toggle('stamped', !!today); b.querySelector('b').innerHTML = today ? `${p.name.replace(/\s.*/, '').slice(0, 3)}<br><small>${window.Store.kstToday().slice(5).replace('-', '.')}</small>` : '도장<br>꾹!';
-      why.textContent = today ? ''
-    : cfg.testMode ? '테스트 모드 · 어디서나 찍혀요'
+  b.disabled = !ok && !s; b.classList.toggle('stamped', !!s); /* 찍은 곳은 도장을 누르면 기록·취소 창 */ b.querySelector('b').innerHTML = s ? `${p.name.replace(/\s.*/, '').slice(0, 3)}<br><small>${s.last.slice(5).replace('-', '.')}</small>` : '도장<br>꾹!';
+      why.textContent = s ? (today ? '' : ok ? '오늘 또 찍을 수 있어요' : '') : cfg.testMode ? ''
     : d === null ? '내 위치를 켜면 반경 안에서 도장을 찍을 수 있어요.'
     : !S.accuracyOk && d <= p.r ? 'GPS 신호가 약해요. 하늘이 보이는 곳에서 잠시 기다려 주세요.'
     : ok ? '지금 찍을 수 있어요'
@@ -256,7 +255,7 @@ function startGPS(first) {
 
 /* ---------- 초기화 ---------- */
 function init(opts) {
-  store = opts.store; onStamp = opts.onStamp; onDetail = opts.onDetail; onNear = opts.onNear; onAddTrip = opts.onAddTrip; onPhoto = opts.onPhoto; onGallery = opts.onGallery; onUndo = opts.onUndo; toastFn = opts.toast || (() => {});
+  store = opts.store; onStamp = opts.onStamp; onDetail = opts.onDetail; onNear = opts.onNear; onAddTrip = opts.onAddTrip; onPhoto = opts.onPhoto; onGallery = opts.onGallery; onUndo = opts.onUndo; onStampInfo = opts.onStampInfo; toastFn = opts.toast || (() => {});
   mapEl = document.getElementById('map'); ov = document.getElementById('ov');
   let last = null; try { last = JSON.parse(localStorage.getItem('lm-lastpos')); } catch (e) {}
   S = { me: last, live: false, accuracyOk: false, sel: null, filter: { set: '', cat: '', sido: '', gu: '', seen: '' } };
@@ -274,7 +273,7 @@ function init(opts) {
   document.getElementById('closeSheet').onclick = closeSheet;
   // 도장 자체를 꾹 누르면 그 자리에서 바로 먹이 번지기 시작한다 (손을 뗄 필요 없음)
   document.getElementById('stampBtn').oncontextmenu = e => e.preventDefault();
-  document.getElementById('stampBtn').onpointerdown = e => { const p = byId(S.sel); if (!p || e.currentTarget.disabled) return; const pos = S.me || (cfg.testMode ? { lat: p.lat, lng: p.lng, accuracy: 5 } : null); if (!pos) return; e.preventDefault(); onStamp(p, pos, { x: e.clientX, y: e.clientY, pointerId: e.pointerId }); };
+  document.getElementById('stampBtn').onpointerdown = e => { const p = byId(S.sel); if (!p || e.currentTarget.disabled) return; if (e.currentTarget.classList.contains('stamped') && !(cfg.testMode || (S.me && inRange(p) && S.accuracyOk && store.stampsOf(p.id)?.last !== window.Store.kstToday()))) { e.preventDefault(); onStampInfo && onStampInfo(p); return; } const pos = S.me || (cfg.testMode ? { lat: p.lat, lng: p.lng, accuracy: 5 } : null); if (!pos) return; e.preventDefault(); onStamp(p, pos, { x: e.clientX, y: e.clientY, pointerId: e.pointerId }); };
   document.getElementById('jNear').onclick = () => S.me ? map.flyTo({ center: [S.me.lng, S.me.lat], zoom: 14 }) : startGPS();
   document.getElementById('jCity').onclick = () => { const base = S.me || { lat: map.getCenter().lat, lng: map.getCenter().lng }; const p = L.map(p => ({ p, d: dist(base, p) })).sort((a, b) => a.d - b.d)[0].p; const ms = L.filter(q => q.sido === p.sido); const b = new maplibregl.LngLatBounds(); ms.forEach(q => b.extend([q.lng, q.lat])); const c = window.SIDO_CENTER[p.sido]; if (c) b.extend(c); map.fitBounds(b, { padding: 70, maxZoom: 10.5, duration: 800 }); };
   document.getElementById('jNat').onclick = () => map.fitBounds([[125.0, 33.1], [130.95, 38.65]], { padding: 30, duration: 900 });

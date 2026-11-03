@@ -14,7 +14,7 @@ const Snd = { ctx: null, get() { try { this.ctx = this.ctx || new (window.AudioC
   chime() { const c = this.get(); if (!c) return; [660, 880].forEach((hz, i) => { const o = c.createOscillator(), g = c.createGain(); o.type = 'triangle'; o.frequency.value = hz; g.gain.setValueAtTime(0.0001, c.currentTime + i * 0.12); g.gain.exponentialRampToValueAtTime(0.18, c.currentTime + i * 0.12 + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + i * 0.12 + 0.5); o.connect(g).connect(c.destination); o.start(c.currentTime + i * 0.12); o.stop(c.currentTime + i * 0.12 + 0.55); }); } };
 const vib = p => { try { navigator.vibrate && navigator.vibrate(p); } catch (e) {} };
 /* 지지지징… 점점 세지는 패턴: 짧고 드문 떨림에서 길고 촘촘한 떨림으로 (안드로이드는 세기 조절이 없어서 길이로 낸다) */
-const holdPattern = () => { const p = []; let t = 0; for (let i = 0; t < 1900; i++) { const f = t / 1900; const on = Math.round(12 + f * 70), off = Math.round(110 - f * 95); p.push(on, off); t += on + off; } return p; };
+const holdPattern = () => { const p = []; let t = 0; for (let i = 0; t < 1950; i++) { const f = Math.min(1, t / 1950); const on = Math.round(8 + f * f * 160), off = Math.round(170 - f * 158); p.push(on, Math.max(8, off)); t += on + Math.max(8, off); } return p; }; /* 처음엔 짧게 띡·띡, 끝엔 거의 끊김 없이 웅— */
 const reduce = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /* 종이 질감 */
@@ -24,7 +24,7 @@ function open({ place, check, commit, onPhoto, onDone, onDogam, onCancel, toast,
   const el = document.createElement('section'); el.className = 'stampscr'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', `${place.name} 도장 찍기`);
   const short = place.name.replace(/\s.*/, '').slice(0, 3);
   el.innerHTML = `<canvas id="inkC"></canvas><button class="cancel" type="button" aria-label="닫기">×</button>
-    <div class="guide"><div class="ring">${short}</div><p>화면을 꾹 눌러 주세요</p><small>먹이 다 번지면 손을 떼세요</small></div>
+    <div class="guide"><div class="ring">${short}</div><p>화면을 꾹 눌러 주세요</p><small>먹이 다 번질 때까지 꾸욱 눌러 주세요</small></div>
     <div class="result"><h2 id="rTitle"></h2><p id="rSub"></p><div class="btns"><button class="btn pale" type="button" id="rDogam">다녀온 곳 보기</button><button class="btn ink" type="button" id="rPhoto">사진 남기기</button></div><p class="hint">사진은 나중에 랜드마크 탭에서도 올릴 수 있어요</p></div>`;
   document.getElementById('app').appendChild(el);
   const cv = el.querySelector('canvas'), ctx = cv.getContext('2d');
@@ -56,7 +56,7 @@ function open({ place, check, commit, onPhoto, onDone, onDogam, onCancel, toast,
     if (live) ctx.clearRect(0, 0, W, H); else paperBg();
     el.classList.toggle('onmap', live);
     if (state === 'filling') { fill = Math.min(1, (now - t0) / T.fill); drawInk(fill); el.classList.toggle('inking', fill > 0.3);
-      if (fill >= 1 && !holdDone) { holdDone = true; vib([0, 120]); el.querySelector('.guide p').textContent = '지금 손을 떼세요!';
+      if (fill >= 1 && !holdDone) { holdDone = true; vib([0, 120]); el.querySelector('.guide p').textContent = '손을 떼세요!';
         autoT = setTimeout(() => { if (state === 'filling') up({ preventDefault() {} }); }, 700); } // 계속 누르고 있어도 저절로 찍힌다
     } else if (state === 'releasing') { const k = Math.min(1, (now - t0) / T.clear); drawInk(1 - k); if (k >= 1) { state = 'idle'; fill = 0; holdDone = false; }
     } else if (state === 'slam') { drawInk(1, true); const k = Math.min(1, (now - t0) / T.slam), e = Math.pow(k, 3); drawSeal(2.5 - 1.5 * e, Math.min(1, k * 1.6)); if (k >= 1) { state = 'clearing'; t0 = now; el.classList.add('shake'); vib([0, 90]); setTimeout(() => el.classList.remove('shake'), 260); }
@@ -69,7 +69,7 @@ function open({ place, check, commit, onPhoto, onDone, onDogam, onCancel, toast,
   function finish() { Snd.chime(); el.classList.add('done'); const v = result?.visitNo || 1; el.querySelector('#rTitle').textContent = `${place.name}`; el.querySelector('#rSub').textContent = `${window.Store.kstToday().replaceAll('-', '.')} · 방문 ${v}회${v > 1 ? ' · 다시 와 주셨네요' : ' · 첫 도장이에요'}`; onDone && onDone(result); }
 
   let pid = null, closed = false; /* 누르기 시작한 손가락만 본다. 다른 손가락이 닿았다 떼도 무시 */
-  function begin(cx, cy, id) { pid = id ?? null; clearTimeout(autoT); committed = false; result = null; el.classList.remove('again'); el.querySelector('.guide p').textContent = '꾹 누르고 계세요'; press = { x: W / 2, y: H / 2 - 20 }; /* 어디를 눌러도 먹은 화면 가운데서 번진다 */ state = 'filling'; t0 = performance.now(); lastVib = 0; Snd.brush(); if (!reduce()) vib(holdPattern());
+  function begin(cx, cy, id) { pid = id ?? null; clearTimeout(autoT); committed = false; result = null; el.classList.remove('again'); el.querySelector('.guide p').textContent = '꾸우욱 누르고 계세요'; press = { x: W / 2, y: H / 2 - 20 }; /* 어디를 눌러도 먹은 화면 가운데서 번진다 */ state = 'filling'; t0 = performance.now(); lastVib = 0; Snd.brush(); if (!reduce()) vib(holdPattern());
     checked = check ? check() : { ok: true }; // 찍을 수 있는지만 본다. 기록은 손을 뗄 때
     if (!raf) raf = requestAnimationFrame(frame); }
   function down(e) { if (!['idle', 'releasing', 'fail'].includes(state) || el.classList.contains('done')) return; if (e.target.closest('.cancel')) return; e.preventDefault(); fill = 0; holdDone = false; begin(e.clientX, e.clientY, e.pointerId); } /* 중간에 뗐다가 바로 다시 눌러도 받는다 */
@@ -90,7 +90,7 @@ function open({ place, check, commit, onPhoto, onDone, onDogam, onCancel, toast,
   el.querySelector('#rPhoto').onclick = () => { close(); onPhoto && onPhoto(result); };
   function close() { closed = true; clearTimeout(autoT); cancelAnimationFrame(raf); removeEventListener('resize', resize); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up); el.remove(); }
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0); el.classList.add('onmap');
-  if (start) { begin(start.x, start.y, start.pointerId); el.querySelector('.guide p').textContent = '그대로 꾹 누르고 계세요'; }
+  if (start) { begin(start.x, start.y, start.pointerId); el.querySelector('.guide p').textContent = '꾸우욱 누르고 계세요'; }
   return { close };
 }
 return { open, T };

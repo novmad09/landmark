@@ -584,9 +584,10 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid var(-
 .cover .tag.r{left:auto;right:10px}
 .detail .hero .cnt{position:absolute;right:12px;bottom:12px;background:rgba(0,0,0,.45);color:#fff;font-size:13px;font-weight:600;padding:5px 10px;border-radius:999px}
 .sealrow .visit{flex:1;min-width:0}
-.sheet .sealrow,.detail .sealrow{flex-direction:row;align-items:center;gap:14px;text-align:left}
+.sheet .sealrow,.detail .sealrow{flex-direction:row;align-items:center;justify-content:center;gap:14px;text-align:center}
 .sheet .sealrow .go,.detail .sealrow .go{flex:1}
-.sheet .sealrow .why{width:100%;text-align:left;order:5;margin:0}
+.sheet .sealrow .why{width:100%;text-align:center;order:5;margin:0}
+.sheet .sealrow .why:empty{display:none}
 .act3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
 .act3 .btn{min-height:54px;font-size:15px;padding:10px 6px;background:var(--bg);color:var(--ink);border:1.5px solid var(--line);text-align:center;display:flex;align-items:center;justify-content:center}
 .act3 .btn:first-child{background:var(--c,var(--brand));color:#fff;border-color:transparent}
@@ -640,7 +641,11 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid var(-
 .trow .ud button{width:36px;height:36px;border-radius:9px;border:1px solid var(--line);background:var(--bg);color:var(--ink);cursor:pointer;font-size:12px}
 .trow .ud button:disabled{opacity:.3}
 .trow .ud .rm{color:var(--hot);font-size:17px}
-.tripbar2{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
+.tripbar2{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:14px 0 12px}
+.tripbar2 .seg{background:var(--card);border:1.5px solid var(--line);border-radius:999px;padding:3px}
+.tripbar2 .seg button{border-radius:999px;min-height:36px;padding:0 14px}
+.tripbar2 .seg button[aria-selected="true"]{background:var(--brand);color:#fff;box-shadow:none}
+.tripbar2 .chip.up{height:42px;padding:0 14px}
 .seg.sm button{padding:8px 12px;font-size:14px;min-height:38px}
 .cta2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .cta2 .btn{min-height:50px;font-size:15px}
@@ -705,3 +710,13 @@ p.spot{margin:0 16px 2px}
 .sheet .sealbtn b{font-size:23px}
 .cover .pop{display:none}
 .sheet .visit{padding:8px 12px;font-size:14px}
+.stampinfo .box{align-items:center;text-align:center}
+.stampinfo .si-seal .sealbtn{display:grid;width:118px;height:118px}
+.stampinfo h2{margin:4px 0 0}
+.stampinfo p{margin:0;color:var(--ink-soft)}
+.si-days{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
+.si-days li{font-size:13.5px;padding:4px 10px;border-radius:999px;background:var(--bg)}
+.stampinfo .btn{width:100%}
+.screen.scroll{overflow-x:hidden;overflow-y:auto}
+.detail,.sheet,.login .box{overflow-x:hidden}
+.onb .note a{color:#fff;text-decoration:underline}

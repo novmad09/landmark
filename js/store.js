@@ -79,8 +79,8 @@ const local = {
     return { ok: true, visitNo: s.count, stamp: s };
   },
   /* 오늘 찍은 도장 취소 (실수로 찍었을 때) */
-  async unstamp(placeId) { const t = kstToday(), s = this.stamps[placeId]; if (!s || s.last !== t) return { ok: false, reason: '오늘 찍은 도장만 취소할 수 있어요' };
-    s.count = Math.max(0, s.count - 1); s.days = (s.days || []).filter(d => d !== t); if (!s.count || !s.days.length) delete this.stamps[placeId]; else { s.last = s.days.slice().sort().at(-1); s.months = [...new Set(s.days.map(d => +d.slice(5, 7)))]; }
+  async unstamp(placeId) { const s = this.stamps[placeId]; if (!s) return { ok: false, reason: '취소할 도장이 없어요' }; const t = s.last; /* 가장 최근 방문 하나를 지운다 */
+    s.count = Math.max(0, s.count - 1); s.days = (s.days || [s.first, s.last]).filter(d => d && d !== t); if (!s.count || !s.days.length) delete this.stamps[placeId]; else { s.last = s.days.slice().sort().at(-1); s.months = [...new Set(s.days.map(d => +d.slice(5, 7)))]; }
     LS.set('lm-stamps', this.stamps); return { ok: true }; },
   photosOf(placeId) { const bl = Safety.blocked(); return this.photos.filter(x => x.placeId === placeId && !bl.has(x.userId)).sort((a, b) => b.likes - a.likes || b.createdAt.localeCompare(a.createdAt)); },
   coverOf(placeId) { const ph = this.photosOf(placeId)[0]; return ph && ph.likes >= 0 ? ph : null; },
@@ -135,7 +135,7 @@ const remote = {
     this.stamps[placeId] = s;
     return { ok: true, visitNo: data.visit_no, stamp: s };
   },
-  async unstamp(placeId) { if (!this.session) return { ok: false, reason: '로그인이 필요해요' }; const t = kstToday(); const from = new Date(new Date(t + 'T00:00:00Z').getTime() - 9 * 3600e3).toISOString(); const { error } = await this.sb.from('stamps').delete().eq('user_id', this.session.user.id).eq('place_id', placeId).gte('stamped_at', from); if (error) return { ok: false, reason: serverErr(error) }; await this.refresh(); return { ok: true }; },
+  async unstamp(placeId) { if (!this.session) return { ok: false, reason: '로그인이 필요해요' }; const s = this.stamps[placeId]; if (!s) return { ok: false, reason: '취소할 도장이 없어요' }; const t = s.last; const from = new Date(new Date(t + 'T00:00:00Z').getTime() - 9 * 3600e3).toISOString(); const { error } = await this.sb.from('stamps').delete().eq('user_id', this.session.user.id).eq('place_id', placeId).gte('stamped_at', from); if (error) return { ok: false, reason: serverErr(error) }; await this.refresh(); return { ok: true }; },
   photosOf(placeId) { const bl = Safety.blocked(); return this.photos.filter(x => x.placeId === placeId && !bl.has(x.userId)).sort((a, b) => b.likes - a.likes || b.createdAt.localeCompare(a.createdAt)); },
   coverOf(placeId) { const ph = this.photosOf(placeId)[0]; return ph && ph.likes >= 5 ? ph : null; },
   async addPhoto(placeId, dataUrl, pos) {

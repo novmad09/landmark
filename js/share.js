@@ -33,7 +33,7 @@ function seal(g, cx, cy, r, text, color) {
 }
 function brand(g, y) {
   g.textAlign = 'center'; g.textBaseline = 'alphabetic'; g.fillStyle = 'rgba(28,26,23,.45)';
-  g.font = F(600, 30); g.fillText('랜드마크 도장', W / 2, y);
+  g.font = F(600, 30); g.fillText('랜드마크', W / 2, y);
 }
 const short = n => n.replace(/[\s(].*/, '').slice(0, 3);
 
@@ -95,7 +95,7 @@ async function photo(url, place, date) {
   g.textAlign = 'left'; g.textBaseline = 'alphabetic';
   g.fillStyle = INK; g.font = DISP(52); g.fillText(place.name, 40, c.height - 76);
   g.fillStyle = 'rgba(28,26,23,.55)'; g.font = F(500, 30); g.fillText(`${place.sido} ${place.gu}${date ? ' · ' + date : ''}`, 40, c.height - 32);
-  g.textAlign = 'right'; g.fillStyle = 'rgba(28,26,23,.45)'; g.font = F(600, 28); g.fillText('랜드마크 도장', c.width - 40, c.height - 44);
+  g.textAlign = 'right'; g.fillStyle = 'rgba(28,26,23,.45)'; g.font = F(600, 28); g.fillText('랜드마크', c.width - 40, c.height - 44);
   return c;
 }
 
