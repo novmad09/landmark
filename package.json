@@ -1,0 +1,20 @@
+{
+  "name": "landmark-stamp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "대한민국 랜드마크에 직접 가서 도장을 모으는 여행 도감",
+  "scripts": {
+    "dev": "python3 -m http.server 8080",
+    "build": "rm -rf www && mkdir www && cp -r index.html sw.js manifest.webmanifest css js icons vendor legal www/",
+    "cap:init": "npx cap add ios && npx cap add android",
+    "cap:sync": "npm run build && npx cap sync",
+    "ios": "npm run cap:sync && npx cap open ios",
+    "android": "npm run cap:sync && npx cap open android"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.1.2",
+    "@capacitor/core": "^6.1.2",
+    "@capacitor/ios": "^6.1.2",
+    "@capacitor/android": "^6.1.2"
+  }
+}
