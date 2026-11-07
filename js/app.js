@@ -82,9 +82,10 @@ function requireLogin() {
 
 /* ---------- 도장 흐름 ---------- */
 async function startStamp(place, pos, start) {
-  const hadUser = !!store.getUser(); if (!(await requireLogin())) return;
+  const noDialog = !!store.getUser() || (store.mode === 'local' && !!LS.get('lm-agreed', null)); /* 이름이 자동으로 정해지면 누르던 손가락 그대로 이어서 찍는다 */
+  if (!(await requireLogin())) return;
   mapS.closeSheet();
-  window.StampScreen.open({ place, toast, start: hadUser ? start : null,
+  window.StampScreen.open({ place, toast, start: noDialog ? start : null,
     check: () => store.check(place.id, pos),
     commit: () => store.stamp(place.id, pos),
     onDone: () => { mapS.refresh(); Nudge.promote(); scheduleEvening(); const st = mapS.regionStats()[place.rg]; if (st && st.total > 1 && st.done === st.total) setTimeout(() => toast(`${place.rgName} 전부 모았어요! 지도에 색이 칠해졌어요`), 600); },
