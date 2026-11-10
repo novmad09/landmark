@@ -81,6 +81,8 @@ function passes(p) { const f = S.filter;
   if (f.gu && p.gu !== f.gu) return false;
   if (f.seen === 'yes' && !been(p.id)) return false;
   if (f.seen === 'no' && been(p.id)) return false;
+  if (f.seen === 'stamp' && !visited(p.id)) return false; /* 직접 가서 찍은 곳만 */
+  if (f.seen === 'mem' && (visited(p.id) || !remembered(p.id))) return false; /* 사진만 있고 아직 현장 도장은 없는 곳 */
   return true; }
 const filterCount = () => FKEYS.filter(k => S.filter[k]).length;
 /* 지금 지도에 보일 랜드마크 */
@@ -127,6 +129,7 @@ let geoSig = '';
 function openMem(f) { const src = map.getSource('mem'); const done = ids => onMemPhotos && onMemPhotos(ids);
   if (f.properties.cluster) src.getClusterLeaves(f.properties.cluster_id, 500, 0).then(fs => done(fs.map(x => x.properties.id))).catch(() => {}); else done([f.properties.id]); }
 function refreshMem() { const s = map && map.getSource('mem'); if (s) s.setData(memFC()); renderUI(); dirty(); paintRegions(); }
+function memLayerVis() { if (map && map.getLayer('mem-dot')) map.setLayoutProperty('mem-dot', 'visibility', ['stamp', 'no'].includes(S.filter.seen) ? 'none' : 'visible'); } /* 현장 도장만·안 간 곳만 볼 땐 분홍 점도 숨긴다 */
 function drawGeo() {
   const g = map.getSource('guide'), rs = map.getSource('radius'); if (!g || !rs) return;
   // 내용이 그대로면 다시 올리지 않는다
@@ -202,10 +205,10 @@ function renderUI() {
 }
 
 /* ---------- 필터 ---------- */
-function renderFilterBtn() { const b = document.getElementById('filterBtn'); if (!b) return; const n = filterCount();
+function renderFilterBtn() { memLayerVis(); const b = document.getElementById('filterBtn'); if (!b) return; const n = filterCount();
   b.textContent = n ? `필터 ${n}` : '필터'; b.setAttribute('aria-pressed', String(n > 0));
   const bar = document.getElementById('filterBar'); const f = S.filter;
-  const names = [f.set && setName(f.set), f.cat && (CATS[f.cat].emoji + ' ' + CATS[f.cat].name), f.gu ? `${f.sido} ${f.gu}` : f.sido, f.seen === 'yes' ? '다녀온 곳' : f.seen === 'no' ? '아직 안 간 곳' : ''].filter(Boolean);
+  const names = [f.set && setName(f.set), f.cat && (CATS[f.cat].emoji + ' ' + CATS[f.cat].name), f.gu ? `${f.sido} ${f.gu}` : f.sido, { yes: '다녀온 곳', no: '아직 안 간 곳', stamp: '현장 도장', mem: '추억만' }[f.seen] || ''].filter(Boolean);
   bar.hidden = !names.length; if (names.length) { document.getElementById('filterBarName').textContent = `${names.join(' · ')} · ${pool0().length}곳`; } }
 function openFilter() {
   const f = S.filter; const el = document.createElement('div'); el.className = 'login mapfilter';
@@ -217,7 +220,7 @@ function openFilter() {
       <div class="frow"><span>모음</span>${chip('set', '', '전체')}${window.SETS.map(s => chip('set', s.id, s.name)).join('')}</div>
       <div class="frow"><span>종류</span>${chip('cat', '', '전체')}${Object.entries(CATS).map(([k, c]) => chip('cat', k, c.emoji + ' ' + c.name)).join('')}</div>
       <div class="frow"><span>지역</span><div class="sel2"><select id="fSido"><option value="">전국</option>${sidos.map(s => `<option value="${s}" ${f.sido === s ? 'selected' : ''}>${s}</option>`).join('')}</select><select id="fGu" ${gus.length ? '' : 'disabled'}><option value="">${f.sido ? f.sido + ' 전체' : '시·군·구'}</option>${gus.map(g => `<option value="${g}" ${f.gu === g ? 'selected' : ''}>${g}</option>`).join('')}</select></div></div>
-      <div class="frow"><span>방문</span>${chip('seen', '', '전체')}${chip('seen', 'no', '아직 안 간 곳')}${chip('seen', 'yes', '다녀온 곳')}</div>
+      <div class="frow"><span>방문</span>${chip('seen', '', '전체')}${chip('seen', 'yes', '다녀온 곳')}${chip('seen', 'stamp', '🔴 현장 도장')}${chip('seen', 'mem', '🌸 추억만')}${chip('seen', 'no', '아직 안 간 곳')}</div>
       <p class="cnt">${pool0().length}곳이 지도에 보여요</p>
       <div class="askrow"><button class="btn ghost" type="button" id="fRst">전체 보기</button><button class="btn primary" type="button" id="fOk">닫기</button></div></div>`;
     el.querySelectorAll('.chip').forEach(b => b.onclick = () => { const k = b.dataset.k; f[k] = f[k] === b.dataset.v ? '' : b.dataset.v; if (k === 'sido') f.gu = ''; apply(); render(); });

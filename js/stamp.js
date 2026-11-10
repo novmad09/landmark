@@ -66,7 +66,7 @@ function open({ place, check, commit, onPhoto, onDone, onDogam, onCancel, toast,
     else if (state === 'fail') { const k = Math.min(1, (now - t0) / 500); drawInk(1 - k); if (k >= 1) { state = 'idle'; fill = 0; holdDone = false; } }
     if (state !== 'done') raf = requestAnimationFrame(frame); else raf = null;
   }
-  function finish() { Snd.chime(); el.classList.add('done'); const v = result?.visitNo || 1; el.querySelector('#rTitle').textContent = `${place.name}`; el.querySelector('#rSub').textContent = `${window.Store.kstToday().replaceAll('-', '.')} · 방문 ${v}회${v > 1 ? ' · 다시 와 주셨네요' : ' · 첫 도장이에요'}`; onDone && onDone(result); }
+  function finish() { Snd.chime(); el.classList.add('done'); const v = result?.visitNo || 1; el.querySelector('#rTitle').textContent = `${place.name}`; el.querySelector('#rSub').textContent = `${window.Store.kstToday().replaceAll('-', '.')} · 방문 ${v}회${v > 1 ? ' · 다시 와 주셨네요' : (() => { const m = window.Memory && window.Memory.of(place.id); if (!m) return ' · 첫 도장이에요'; const y = +window.Store.kstToday().slice(0, 4) - +m.last.slice(0, 4); return y >= 1 ? ` · ${y}년 만에 다시 왔어요` : ' · 추억의 그곳에 다시 왔어요'; })()}`; onDone && onDone(result); }
 
   let pid = null, closed = false; /* 누르기 시작한 손가락만 본다. 다른 손가락이 닿았다 떼도 무시 */
   function begin(cx, cy, id) { pid = id ?? null; clearTimeout(autoT); committed = false; result = null; el.classList.remove('again'); el.querySelector('.guide p').textContent = '꾸우욱 누르고 계세요'; press = { x: W / 2, y: H / 2 - 20 }; /* 어디를 눌러도 먹은 화면 가운데서 번진다 */ state = 'filling'; t0 = performance.now(); lastVib = 0; Snd.brush(); if (!reduce()) vib(holdPattern());
