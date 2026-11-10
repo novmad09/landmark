@@ -10,7 +10,7 @@
       r.onsuccess = () => { this.h = r.result; this.h.onversionchange = () => { try { this.h.close(); } catch (e) {} this.h = null; }; res(this.h); };
       r.onerror = () => rej(r.error); r.onblocked = () => rej(new Error('blocked')); }); },
     async all() { try { const d = await this.open(); return await new Promise((res, rej) => { const q = d.transaction('mem').objectStore('mem').getAll(); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); }); } catch (e) { return []; } },
-    async putMany(list) { const d = await this.open(); return new Promise((res, rej) => { const t = d.transaction('mem', 'readwrite'); const s = t.objectStore('mem'); list.forEach(x => s.put(x)); t.oncomplete = () => res(); t.onerror = () => rej(t.error); }); },
+    async putMany(list) { const d = await this.open(); return new Promise((res, rej) => { const t = d.transaction('mem', 'readwrite'); const s = t.objectStore('mem'); list.forEach(x => s.put(x)); t.oncomplete = () => res(); t.onerror = t.onabort = () => rej(t.error || new Error('abort')); }); },
     async del(id) { const d = await this.open(); return new Promise((res, rej) => { const q = d.transaction('mem', 'readwrite').objectStore('mem').delete(id); q.onsuccess = () => res(); q.onerror = () => rej(q.error); }); },
     async wipe() { try { if (this.h) { this.h.close(); this.h = null; } } catch (e) {} await new Promise(res => { const r = indexedDB.deleteDatabase(DB); r.onsuccess = r.onerror = r.onblocked = () => res(); }); },
   };
@@ -22,12 +22,13 @@
   const match = (lat, lng) => { let best = null, bd = Infinity; for (const p of L) { const d = dist({ lat, lng }, p); if (d <= memR(p) && d < bd) { best = p; bd = d; } } return best; };
   const kst = ms => new Date(ms + 9 * 3600e3).toISOString().slice(0, 10);
 
-  let list = [], urls = new Map();
+  let list = [], urls = new Map(), busy = false;
   const url = m => { if (!m.thumb) return ''; let u = urls.get(m.id); if (!u) { u = URL.createObjectURL(m.thumb); urls.set(m.id, u); } return u; };
 
   async function thumb(file) {
     try {
-      const bmp = await createImageBitmap(file); const k = Math.min(1, 480 / Math.max(bmp.width, bmp.height));
+      let bmp; try { bmp = await createImageBitmap(file, { resizeWidth: 640, resizeQuality: 'medium' }); } catch (e) { bmp = await createImageBitmap(file); } /* 큰 사진을 통째로 풀지 않게 줄여서 연다 */
+      const k = Math.min(1, 480 / Math.max(bmp.width, bmp.height));
       const c = document.createElement('canvas'); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
       c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height); bmp.close && bmp.close();
       return await new Promise(r => c.toBlob(b => r(b), 'image/jpeg', 0.72));
@@ -37,7 +38,8 @@
     let gps = null, at = null;
     try { const x = window.exifr && await window.exifr.parse(file); /* 한 번에 위치·날짜 */
       if (x) { if (isFinite(x.latitude) && isFinite(x.longitude) && (x.latitude || x.longitude)) gps = { lat: x.latitude, lng: x.longitude };
-        const d = x.DateTimeOriginal || x.CreateDate || x.ModifyDate; if (d instanceof Date && !isNaN(d)) at = d.getTime(); } } catch (e) {}
+        const d = x.DateTimeOriginal || x.CreateDate || x.ModifyDate; /* 사진에 적힌 시각은 찍은 곳(한국) 시계 그대로 본다. 폰 시간대가 달라도 날짜가 안 밀리게 */
+        if (d instanceof Date && !isNaN(d)) at = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours() - 9, d.getMinutes(), d.getSeconds()); } } catch (e) {}
     return { gps, at: at || file.lastModified || Date.now(), exifDate: !!at };
   }
 
@@ -46,7 +48,8 @@
     all: () => list,
     count: () => list.length,
     /* 명소별 추억 */
-    places() { const g = {}; list.forEach(m => { if (!m.placeId) return; const s = g[m.placeId] || (g[m.placeId] = { count: 0, first: null, last: null, days: [] }); s.count++; const d = kst(m.at); if (!s.first || d < s.first) s.first = d; if (!s.last || d > s.last) s.last = d; if (!s.days.includes(d)) s.days.push(d); }); return g; },
+    places() { const g = {}; list.forEach(m => { if (!m.placeId) return; const s = g[m.placeId] || (g[m.placeId] = { count: 0, first: null, last: null, days: [] }); s.count++; const d = kst(m.at); if (!s.first || d < s.first) s.first = d; if (!s.last || d > s.last) s.last = d; if (m.exifDate !== false && !s.days.includes(d)) s.days.push(d); });
+      Object.values(g).forEach(s => { if (!s.days.length) s.undated = true; }); return g; }, /* 찍은 날짜가 없는 사진은 '언제 갔는지'로 치지 않는다 */
     of(placeId) { return M.places()[placeId] || null; },
     photosOf(placeId) { return list.filter(m => m.placeId === placeId).sort((a, b) => a.at - b.at); },
     loose() { return list.filter(m => !m.placeId && m.lat != null); }, /* 명소 밖에서 찍은 위치 있는 사진 */
@@ -54,7 +57,9 @@
     url, dist, memR, kst,
     item(m, extra) { const p = m.placeId && L.find(x => x.id === m.placeId); return { url: url(m), cap: `${p ? p.name + ' · ' : ''}${kst(m.at).replaceAll('-', '.')}${m.src === 'manual' ? ' · 직접 추가' : ''}`, mem: m, ...(extra || {}) }; },
     /* 여러 장 불러오기. onProg(i, n). 같은 사진(이름·크기·수정시각)은 건너뛴다 */
+    busy: () => busy,
     async import(files, onProg, opts) {
+      if (busy) throw new Error('busy'); busy = true; try {
       const have = new Set(list.map(m => m.key)); const add = []; const res = { added: 0, skipped: 0, matched: 0, loose: 0, noLoc: 0, places: new Set(), rejected: 0 };
       const arr = [...files]; for (let i = 0; i < arr.length; i++) {
         const f = arr[i]; onProg && onProg(i, arr.length); if (!/^image\//.test(f.type) && !/\.(jpe?g|heic|heif|png|webp)$/i.test(f.name)) continue;
@@ -62,6 +67,9 @@
         if (have.has(key)) { /* 이미 있는 사진: 명소 인증이면, 아직 어디에도 안 붙은 사진만 그 명소에 붙여 준다 */
           const old = list.find(m => m.key === key), tp = opts && opts.placeId && L.find(x => x.id === opts.placeId);
           if (old && tp && !old.placeId) { if (old.lat != null && dist(old, tp) > memR(tp) * 3) { res.rejected++; continue; } old.placeId = tp.id; old.src = 'manual'; add.push(old); res.added++; res.matched++; res.places.add(tp.id); continue; }
+          if (old && old.lat == null) { const r2 = await read(f); if (r2.gps) { /* 지난번엔 위치 없이 들어온 사진: 이번에 위치가 있으면 채워 준다 */
+            old.lat = r2.gps.lat; old.lng = r2.gps.lng; if (r2.exifDate) { old.at = r2.at; old.exifDate = true; } const p2 = old.placeId ? L.find(x => x.id === old.placeId) : match(old.lat, old.lng);
+            if (p2) { old.placeId = p2.id; old.verified = true; res.matched++; res.places.add(p2.id); } else res.loose++; add.push(old); res.added++; res.fixed = (res.fixed || 0) + 1; continue; } }
           res.skipped++; continue; }
         have.add(key);
         const r = await read(f); let p = r.gps ? match(r.gps.lat, r.gps.lng) : null;
@@ -73,7 +81,8 @@
         if (add.length >= 25) { await db.putMany(add.splice(0)); }
       }
       if (add.length) await db.putMany(add);
-      onProg && onProg(arr.length, arr.length); list = await db.all(); res.places = res.places.size; return res;
+      onProg && onProg(arr.length, arr.length); res.places = res.places.size; return res;
+      } finally { busy = false; list = await db.all(); } /* 중간에 실패해도 이미 들어간 사진은 목록에 반영 (다시 넣을 때 중복 방지) */
     },
     async remove(id) { await db.del(id); const u = urls.get(id); if (u) { URL.revokeObjectURL(u); urls.delete(id); } list = list.filter(m => m.id !== id); },
     wipe: () => db.wipe(),

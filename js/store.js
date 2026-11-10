@@ -13,9 +13,10 @@ function checkStamp(stamps, placeId, pos) {
   const s = stamps[placeId];
   if (s && s.last === kstToday()) return { ok: false, reason: '오늘 이미 찍었어요', already: true };
   if (cfg.testMode) return { ok: true };
+  if (!pos.at || Date.now() - pos.at > 120000) return { ok: false, reason: '내 위치를 다시 확인하고 있어요. 잠시 후 다시 눌러 주세요' }; /* 예전에 저장된 위치로는 못 찍는다 */
   const d = dist(pos, p), acc = Math.min(pos.accuracy || 0, cfg.maxAccuracy);
   if (d - acc > p.r) return { ok: false, reason: `인증 반경 밖이에요 (${Math.round(d)}m)` };
-  if (pos.accuracy && pos.accuracy > cfg.maxAccuracy * 2) return { ok: false, reason: 'GPS 신호가 약해요. 하늘이 보이는 곳에서 다시 시도해 주세요' };
+  if (pos.accuracy && pos.accuracy > cfg.maxAccuracy) return { ok: false, reason: 'GPS 신호가 약해요. 하늘이 보이는 곳에서 다시 시도해 주세요' };
   return { ok: true };
 }
 

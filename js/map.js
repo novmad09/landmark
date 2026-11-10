@@ -55,7 +55,7 @@ function regionOf(p) { const R = window.REGIONS; if (!R) return null; const pt =
   return bd < 0.05 ** 2 ? best : null; } // 해안선 밖(케이블카·해수욕장)은 가장 가까운 시군구로
 const REGION_OF = {}; L.forEach(p => { const f = regionOf(p); if (f) { p.rg = f.properties.code; p.rgName = f.properties.name; } });
 window.REGION_NAME = code => { const f = (window.REGIONS?.features || []).find(f => f.properties.code === code); return f ? f.properties.name : ''; };
-function regionStats() { const g = {}; L.forEach(p => { if (!p.rg) return; const s = g[p.rg] || (g[p.rg] = { total: 0, done: 0, name: p.rgName }); s.total++; if (been(p.id)) s.done++; }); return g; }
+function regionStats(gpsOnly) { const g = {}; L.forEach(p => { if (!p.rg) return; const s = g[p.rg] || (g[p.rg] = { total: 0, done: 0, name: p.rgName }); s.total++; if (gpsOnly ? visited(p.id) : been(p.id)) s.done++; }); return g; } /* gpsOnly: 뱃지·칭호는 현장 도장만 센다 */
 function paintRegions() { if (!map.getSource('regions')) return; const g = regionStats(); const done = [], part = [];
   Object.entries(g).forEach(([c, s]) => { if (s.done === s.total) done.push(c); else if (s.done > 0) part.push(c); });
   map.setFilter('region-done', ['in', ['get', 'code'], ['literal', done]]); map.setFilter('region-done-line', ['in', ['get', 'code'], ['literal', done]]); map.setFilter('region-part', ['in', ['get', 'code'], ['literal', part]]); }
@@ -245,14 +245,16 @@ function startGPS(first) {
   if (!navigator.geolocation) { gpsMsg('이 기기는 위치를 지원하지 않아요'); return; }
   if (watchId !== null) { if (S.me) map.flyTo({ center: [S.me.lng, S.me.lat], zoom: Math.max(map.getZoom(), 14) }); return; }
   btn.classList.add('on'); btn.classList.remove('err'); gpsMsg('내 위치를 찾는 중…');
-  let lastFix = 0;
+  let lastFix = 0, hadFix = false;
   watchId = navigator.geolocation.watchPosition(pos => {
-    const firstFix = !S.me; const moved = S.me ? dist(S.me, { lat: pos.coords.latitude, lng: pos.coords.longitude }) : 1e9;
-    if (!firstFix && Date.now() - lastFix < 3000 && moved < 5) return; /* 1초마다 오는 똑같은 위치로 화면을 다시 그리지 않는다 */
+    const firstFix = !hadFix; hadFix = true; const moved = S.me ? dist(S.me, { lat: pos.coords.latitude, lng: pos.coords.longitude }) : 1e9;
+    const stale = () => { if (staleT) clearTimeout(staleT); staleT = setTimeout(() => { S.accuracyOk = false; if (S.sel) select(S.sel); }, 90000); }; /* 90초 넘게 새 위치가 없으면 옛 위치로는 못 찍게 */
+    btn.classList.add('on'); btn.classList.remove('err');
+    if (!firstFix && Date.now() - lastFix < 3000 && moved < 5) { if (S.me) S.me.at = Date.now(); stale(); return; } /* 1초마다 오는 똑같은 위치로 화면을 다시 그리지 않는다 */
     lastFix = Date.now(); S.me = { lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy, at: Date.now() }; S.live = true; S.accuracyOk = pos.coords.accuracy <= cfg.maxAccuracy;
-    if (staleT) clearTimeout(staleT); staleT = setTimeout(() => { S.accuracyOk = false; if (S.sel) select(S.sel); }, 90000); /* 90초 넘게 새 위치가 없으면 옛 위치로는 못 찍게 */
+    stale();
     gpsMsg(S.accuracyOk ? '' : `GPS 오차 ${Math.round(pos.coords.accuracy)}m · 하늘이 보이는 곳이 좋아요`);
-    if (firstFix) { map.flyTo({ center: [S.me.lng, S.me.lat], zoom: 13 }); try { localStorage.setItem('lm-lastpos', JSON.stringify(S.me)); } catch (e) {} }
+    if (firstFix) map.flyTo({ center: [S.me.lng, S.me.lat], zoom: 13 }); try { localStorage.setItem('lm-lastpos', JSON.stringify({ lat: S.me.lat, lng: S.me.lng })); } catch (e) {} /* 다음에 열 때 지도 위치용. 시각이 없어서 도장에는 못 쓴다 */
     renderUI(); if (S.sel) select(S.sel); dirty(); nearCheck();
   }, err => { btn.classList.remove('on'); btn.classList.add('err'); S.live = false; S.accuracyOk = false; if (S.sel) select(S.sel);
     if (err.code === 1) { if (watchId !== null) { try { navigator.geolocation.clearWatch(watchId); } catch (e) {} } watchId = null; } /* 권한 거부만 끊는다. 신호 끊김·시간 초과는 계속 기다린다 */
@@ -275,7 +277,7 @@ function init(opts) {
   map.touchZoomRotate.disableRotation(); map.keyboard.disableRotation(); 
   map.addControl(new maplibregl.ScaleControl({ unit: 'metric', maxWidth: 90 }), 'bottom-left');
   let errShown = false; map.on('error', e => { if (!errShown && /tile|source|fetch|network/i.test(String(e?.error?.message || ''))) { errShown = true; opts.toast('지도 데이터를 불러오지 못했어요. 인터넷 연결을 확인해 주세요'); } });
-  map.on('move', dirty); map.on('resize', dirty); map.on('load', () => { paintRegions(); dirty(); }); map.on('style.load', () => { tokCache = {}; geoSig = ''; setTimeout(() => { paintRegions(); drawGeo(); }, 0); }); /* 테마가 바뀌면 선·반경도 다시 */
+  map.on('move', dirty); map.on('resize', dirty); map.on('load', () => { paintRegions(); dirty(); }); map.on('style.load', () => { tokCache = {}; geoSig = ''; setTimeout(() => { paintRegions(); drawGeo(); memLayerVis(); }, 0); }); /* 테마가 바뀌면 선·반경도 다시 */
   let regionsPainted = false; map.on('sourcedata', e => { if (e.sourceId === 'regions' && !regionsPainted && map.getLayer('region-done')) { regionsPainted = true; paintRegions(); } });
   map.on('dragstart', () => movedFlag = true); map.on('zoomstart', () => movedFlag = true); map.on('moveend', () => setTimeout(() => movedFlag = false, 0));
   map.on('click', e => { const f = map.queryRenderedFeatures(e.point, { layers: ['mem-dot'] })[0]; if (f) { openMem(f); return; } if (S.sel) closeSheet(); });

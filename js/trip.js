@@ -43,7 +43,7 @@ function open(t, ctx, opts) {
       <div class="row2"><label>총 걸린 시간 <select id="teHours">${HOURS.map(h => `<option value="${h}" ${h === d.hours ? 'selected' : ''}>${hoursLabel(h)}</option>`).join('')}</select></label></div>
       <input type="text" id="teTip" class="bigin" maxlength="80" placeholder="한 줄 팁 (예: 평일 오전이 한산해요)" value="${esc(d.tip)}">
       <p class="note">가이드에는 순서·메모·사진·이동 방법만 올라가요.</p></div>
-    <div class="fixed"><button class="btn ghost" type="button" id="teSave">저장</button><button class="btn primary" type="button" id="tePub" ${went ? '' : 'disabled'}>가이드로 올리기</button></div>`;
+    ${went ? '' : '<p class="note tenote">가이드는 현장 도장을 찍은 곳이 있어야 올릴 수 있어요.</p>'}<div class="fixed"><button class="btn ghost" type="button" id="teSave">저장</button><button class="btn primary" type="button" id="tePub" ${went ? '' : 'disabled'}>가이드로 올리기</button></div>`;
     el.querySelector('.back').onclick = async () => { if (dirty && !(await ask({ title: '저장하지 않고 나갈까요?', text: '고친 내용이 사라져요.', yes: '나가기', no: '계속 쓰기' }))) return; el.remove(); };
     el.querySelector('#teName').onclick = async () => { read(); const n = await ask({ title: '여행 이름', input: '이름', value: d.name, yes: '바꾸기', no: '취소' }); if (n) { d.name = n; dirty = true; render(); } };
     el.querySelectorAll('[data-up]').forEach(b => b.onclick = () => { read(); const i = +b.dataset.up; [d.order[i - 1], d.order[i]] = [d.order[i], d.order[i - 1]]; dirty = true; render(); });

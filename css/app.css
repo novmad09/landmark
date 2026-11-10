@@ -483,7 +483,7 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid var(-
 .award .btn{width:100%;min-height:52px}
 @keyframes slam{0%{transform:scale(2.4) rotate(-8deg);opacity:0}60%{transform:scale(.95) rotate(0);opacity:1}100%{transform:scale(1)}}
 
-.viewer .bar2 .shr{font:inherit;font-size:14px;font-weight:600;color:#fff;background:rgba(255,255,255,.16);border:0;border-radius:999px;padding:9px 16px;cursor:pointer;min-height:42px}
+.viewer .bar2 .shr,.viewer .bar2 .memdel{font:inherit;font-size:14px;font-weight:600;color:#fff;background:rgba(255,255,255,.16);border:0;border-radius:999px;padding:9px 16px;cursor:pointer;min-height:42px}
 .award .box .btn.ghost{background:var(--bg)}
 
 .stampscr.again .guide p{color:var(--hot);animation:nudge .4s ease 2}
@@ -746,3 +746,4 @@ p.spot{margin:0 16px 2px}
 .note{line-height:1.5}
 .melist button small{line-height:1.45}
 .dg-search input::placeholder{font-size:15px}
+.tenote{margin:0 16px 12px;text-align:center}
