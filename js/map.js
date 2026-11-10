@@ -216,7 +216,7 @@ function openFilter() {
   const render = () => {
     const sidos = [...new Set(L.map(p => p.sido))];
     const gus = f.sido ? [...new Set(L.filter(p => p.sido === f.sido).map(p => p.gu))].sort((a, b) => a.localeCompare(b, 'ko')) : [];
-    el.innerHTML = `<div class="box filt"><h2>지도에서 걸러 보기</h2>
+    el.innerHTML = `<div class="box filt"><h2>골라 보기</h2>
       <div class="frow"><span>모음</span>${chip('set', '', '전체')}${window.SETS.map(s => chip('set', s.id, s.name)).join('')}</div>
       <div class="frow"><span>종류</span>${chip('cat', '', '전체')}${Object.entries(CATS).map(([k, c]) => chip('cat', k, c.emoji + ' ' + c.name)).join('')}</div>
       <div class="frow"><span>지역</span><div class="sel2"><select id="fSido"><option value="">전국</option>${sidos.map(s => `<option value="${s}" ${f.sido === s ? 'selected' : ''}>${s}</option>`).join('')}</select><select id="fGu" ${gus.length ? '' : 'disabled'}><option value="">${f.sido ? f.sido + ' 전체' : '시·군·구'}</option>${gus.map(g => `<option value="${g}" ${f.gu === g ? 'selected' : ''}>${g}</option>`).join('')}</select></div></div>

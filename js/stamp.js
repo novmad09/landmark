@@ -24,8 +24,8 @@ function open({ place, check, commit, onPhoto, onDone, onDogam, onCancel, toast,
   const el = document.createElement('section'); el.className = 'stampscr'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', `${place.name} 도장 찍기`);
   const short = place.name.replace(/\s.*/, '').slice(0, 3);
   el.innerHTML = `<canvas id="inkC"></canvas><button class="cancel" type="button" aria-label="닫기">×</button>
-    <div class="guide"><div class="ring">${short}</div><p>화면을 꾹 눌러 주세요</p><small>먹이 다 번질 때까지 꾸욱 눌러 주세요</small></div>
-    <div class="result"><h2 id="rTitle"></h2><p id="rSub"></p><div class="btns"><button class="btn pale" type="button" id="rDogam">다녀온 곳 보기</button><button class="btn ink" type="button" id="rPhoto">사진 남기기</button></div><p class="hint">사진은 나중에 랜드마크 탭에서도 올릴 수 있어요</p></div>`;
+    <div class="guide"><div class="ring">${short}</div><p>화면을 꾹 눌러 주세요</p><small>먹이 다 번지면 도장이 찍혀요</small></div>
+    <div class="result"><h2 id="rTitle"></h2><p id="rSub"></p><div class="btns"><button class="btn pale" type="button" id="rDogam">다녀온 곳 보기</button><button class="btn ink" type="button" id="rPhoto">사진 남기기</button></div><p class="hint">사진은 나중에 올려도 돼요</p></div>`;
   document.getElementById('app').appendChild(el);
   const cv = el.querySelector('canvas'), ctx = cv.getContext('2d');
   let W, H, DPR; const resize = () => { const r = el.getBoundingClientRect(); DPR = Math.min(devicePixelRatio || 1, 2.5); W = r.width; H = r.height; cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR); }; resize(); addEventListener('resize', resize);

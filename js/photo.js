@@ -26,7 +26,7 @@ function drawSeal(ctx, { x, y, R, short, date, angle, seed }) {
 function pickSource() {
   return new Promise(res => {
     const el = document.createElement('div'); el.className = 'login';
-    el.innerHTML = `<div class="box"><h2>사진 남기기</h2><p>도장 스티커와 날짜가 사진에 찍혀요.</p><button class="btn primary" id="cam" type="button">📷 지금 찍기</button><button class="btn ghost" id="lib" type="button">🖼 사진첩에서 고르기</button><button class="btn ghost" id="no" type="button">취소</button></div>`;
+    el.innerHTML = `<div class="box"><h2>사진 남기기</h2><p>사진에 도장과 날짜가 찍혀요.</p><button class="btn primary" id="cam" type="button">📷 지금 찍기</button><button class="btn ghost" id="lib" type="button">🖼 사진첩에서 고르기</button><button class="btn ghost" id="no" type="button">취소</button></div>`;
     document.getElementById('app').appendChild(el);
     const done = v => { el.remove(); res(v); };
     el.querySelector('#cam').onclick = () => done('camera'); el.querySelector('#lib').onclick = () => done('library'); el.querySelector('#no').onclick = () => done(null);

@@ -29,20 +29,20 @@ function open(t, ctx, opts) {
     return `<li class="stop" style="--c:var(--c-${p.cat})"><div class="stophead"><span class="num">${i + 1}</span><b>${p.name}</b><span class="ud"><button type="button" data-up="${i}" aria-label="위로" ${i === 0 ? 'disabled' : ''}>▲</button><button type="button" data-dn="${i}" aria-label="아래로" ${i === d.order.length - 1 ? 'disabled' : ''}>▼</button><button type="button" data-rm="${i}" aria-label="빼기" class="rm">×</button></span></div>
       <small>${p.sido} ${p.gu}${s ? ` · <span class="ok">다녀옴 ${s.last.replaceAll('-', '.')}</span>` : ' · 아직 안 감'}</small>
       <div class="phrow">${phs.map((ref, k) => { const ph = photoOf(ref); return ph ? `<button type="button" class="ph" data-ph="${id}:${k}"><img src="${ph.url}" alt=""><i data-phx="${id}:${k}" aria-label="사진 빼기">×</i></button>` : ''; }).join('')}<button type="button" class="ph add" data-phadd="${id}">+<small>사진</small></button></div>
-      <textarea data-note="${id}" rows="2" maxlength="300" placeholder="여기서 뭘 했나요? 뭘 먹었고, 뭐가 좋았는지">${esc(d.notes[id])}</textarea>
+      <textarea data-note="${id}" rows="2" maxlength="300" placeholder="여기서 뭘 했나요?">${esc(d.notes[id])}</textarea>
       <div class="stay"><span>머문 시간</span><select data-stay="${id}">${STAYS.map(v => `<option value="${v}" ${(d.stay[id] || '') === v ? 'selected' : ''}>${v || '선택 안 함'}</option>`).join('')}</select></div></li>`; };
   const legHtml = (i) => { const lg = legAt(i); const ph = lg.mode === '도보' ? '예: 담장 따라 10분 걸으면 정문' : lg.mode === '자차' ? '예: 주차는 제2주차장이 가까워요' : lg.sub === '버스' ? '예: 12번 버스, 불국사 정류장 → 석굴암 입구' : lg.sub === '지하철' ? '예: 3호선 안국역 → 경복궁역' : lg.mode === '대중교통' ? '예: 어디서 무엇을 탔는지' : '예: 자전거·배·케이블카 등';
     return `<li class="leg"><div class="legline"></div><div class="legbox"><div class="modes">${MODES.map(m => `<button type="button" class="chip sm" data-mode="${i}" data-m="${m}" aria-pressed="${lg.mode === m}">${m}</button>`).join('')}</div>${lg.mode === '대중교통' ? `<div class="modes sub">${SUBS.map(m => `<button type="button" class="chip sm" data-sub="${i}" data-m="${m}" aria-pressed="${lg.sub === m}">${m}</button>`).join('')}</div>` : ''}<input type="text" data-legtext="${i}" maxlength="80" placeholder="${ph}" value="${esc(lg.text)}"><div class="stay"><span>걸린 시간</span><select data-legmin="${i}">${MINS.map(v => `<option value="${v}" ${String(lg.mins || '') === v ? 'selected' : ''}>${v ? v + '분' : '선택 안 함'}</option>`).join('')}</select></div></div></li>`; };
 
   const render = () => {
     const went = d.order.filter(id => stamps[id]).length;
-    el.innerHTML = `<div class="hero gdhero grphero"><button class="back" type="button" aria-label="뒤로"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button><div class="gdhero-in"><button type="button" class="tename" id="teName"><h2>${esc(d.name)} <i>✎</i></h2></button><p>${d.order.length}곳 · ${went}곳 다녀옴 · ${t.kind === 'plan' ? '계획' : '여행'}</p><p class="gr">순서를 바꾸고, 사진과 메모를 남기면 그대로 가이드가 돼요.</p></div></div>
+    el.innerHTML = `<div class="hero gdhero grphero"><button class="back" type="button" aria-label="뒤로"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button><div class="gdhero-in"><button type="button" class="tename" id="teName"><h2>${esc(d.name)} <i>✎</i></h2></button><p>${went === d.order.length ? `${went}곳 다녀옴` : `${d.order.length}곳 중 ${went}곳 다녀옴`}</p><p class="gr">사진과 메모를 남기면 그대로 가이드가 돼요.</p></div></div>
     <div class="body">
       <ol class="route">${d.order.map((id, i) => stopHtml(id, i) + (i < d.order.length - 1 ? legHtml(i) : '')).join('')}</ol>
-      <button type="button" class="btn ghost addstop" id="teAdd">+ 랜드마크 추가</button>
+      <button type="button" class="btn ghost addstop" id="teAdd">+ 장소 추가</button>
       <div class="row2"><label>총 걸린 시간 <select id="teHours">${HOURS.map(h => `<option value="${h}" ${h === d.hours ? 'selected' : ''}>${hoursLabel(h)}</option>`).join('')}</select></label></div>
-      <input type="text" id="teTip" class="bigin" maxlength="80" placeholder="전체 한 줄 팁 (예: 평일 오전이 한산해요)" value="${esc(d.tip)}">
-      <p class="note">가이드로 올리면 순서·메모·사진·이동 방법이 공개돼요. 도장 시간과 내 위치는 올라가지 않아요.</p></div>
+      <input type="text" id="teTip" class="bigin" maxlength="80" placeholder="한 줄 팁 (예: 평일 오전이 한산해요)" value="${esc(d.tip)}">
+      <p class="note">가이드에는 순서·메모·사진·이동 방법만 올라가요.</p></div>
     <div class="fixed"><button class="btn ghost" type="button" id="teSave">저장</button><button class="btn primary" type="button" id="tePub" ${went ? '' : 'disabled'}>가이드로 올리기</button></div>`;
     el.querySelector('.back').onclick = async () => { if (dirty && !(await ask({ title: '저장하지 않고 나갈까요?', text: '고친 내용이 사라져요.', yes: '나가기', no: '계속 쓰기' }))) return; el.remove(); };
     el.querySelector('#teName').onclick = async () => { read(); const n = await ask({ title: '여행 이름', input: '이름', value: d.name, yes: '바꾸기', no: '취소' }); if (n) { d.name = n; dirty = true; render(); } };
@@ -57,7 +57,7 @@ function open(t, ctx, opts) {
     el.querySelectorAll('[data-phadd]').forEach(b => b.onclick = () => { read(); addPhoto(b.dataset.phadd); });
     el.querySelector('#teAdd').onclick = () => { read(); addStop(); };
     el.querySelector('#teSave').onclick = () => { read(); save(); toast('저장했어요'); dirty = false; el.remove(); };
-    el.querySelector('#tePub').onclick = async () => { read(); save(); dirty = false; if (!(await ask({ title: '가이드로 올릴까요?', text: '다른 여행자들이 내 계획으로 가져가고, 다 돌면 별점을 남길 수 있어요.', yes: '올리기', no: '아직' }))) return; el.remove(); ctx.onPublish(Trips.all().find(x => x.id === t.id) || t, d); };
+    el.querySelector('#tePub').onclick = async () => { read(); save(); dirty = false; if (!(await ask({ title: '가이드로 올릴까요?', text: '다른 사람이 이 코스를 따라갈 수 있어요.', yes: '올리기', no: '아직' }))) return; el.remove(); ctx.onPublish(Trips.all().find(x => x.id === t.id) || t, d); };
   };
   const save = () => { Trips.update(t.id, { name: d.name, ids: d.order.slice(), notes: d.notes, stay: d.stay, photos: d.photos, legs: d.legs, tip: d.tip, hours: d.hours, missed: (t.missed || []).filter(id => d.order.includes(id)) }); ctx.onSaved && ctx.onSaved(t.id); };
 
