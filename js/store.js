@@ -76,13 +76,13 @@ const local = {
     if (!cfg.testMode && pos.accuracy && pos.accuracy > cfg.maxAccuracy * 2) return { ok: false, reason: 'GPS 신호가 약해요. 하늘이 보이는 곳에서 다시 시도해 주세요' };
     const t = kstToday(), s = this.stamps[placeId] || { count: 0, first: t, last: null };
     if (s.last === t) return { ok: false, reason: '오늘 이미 찍었어요', already: true };
-    s.count++; s.last = t; const kh = new Date(Date.now() + 9 * 3600e3).getUTCHours(); if (kh >= 5 && kh < 7) s.dawn = true; s.days = [...new Set([...(s.days || []), t])]; s.months = [...new Set([...(s.months || []), +t.slice(5, 7)])]; // 뱃지용 기록
+    s.count++; s.last = t; const kh = new Date(Date.now() + 9 * 3600e3).getUTCHours(); if (kh >= 5 && kh < 7) { s.dawn = true; s.dawnDays = [...new Set([...(s.dawnDays || []), t])]; } s.days = [...new Set([...(s.days || []), t])]; s.months = [...new Set([...(s.months || []), +t.slice(5, 7)])]; // 뱃지용 기록
     this.stamps[placeId] = s; LS.set('lm-stamps', this.stamps);
     return { ok: true, visitNo: s.count, stamp: s };
   },
   /* 오늘 찍은 도장 취소 (실수로 찍었을 때) */
   async unstamp(placeId) { const s = this.stamps[placeId]; if (!s) return { ok: false, reason: '취소할 도장이 없어요' }; const t = s.last; /* 가장 최근 방문 하나를 지운다 */
-    s.count = Math.max(0, s.count - 1); s.days = (s.days || [s.first, s.last]).filter(d => d && d !== t); if (!s.count || !s.days.length) delete this.stamps[placeId]; else { s.last = s.days.slice().sort().at(-1); s.months = [...new Set(s.days.map(d => +d.slice(5, 7)))]; }
+    s.count = Math.max(0, s.count - 1); s.days = (s.days || [s.first, s.last]).filter(d => d && d !== t); if (!s.count || !s.days.length) delete this.stamps[placeId]; else { if (s.dawnDays) { s.dawnDays = s.dawnDays.filter(d => d !== t); s.dawn = s.dawnDays.length > 0; } /* 새벽 도장을 취소하면 해돋이 기록도 뺀다 */ s.last = s.days.slice().sort().at(-1); s.months = [...new Set(s.days.map(d => +d.slice(5, 7)))]; }
     LS.set('lm-stamps', this.stamps); return { ok: true }; },
   photosOf(placeId) { const bl = Safety.blocked(); return this.photos.filter(x => x.placeId === placeId && !bl.has(x.userId)).sort((a, b) => b.likes - a.likes || b.createdAt.localeCompare(a.createdAt)); },
   coverOf(placeId) { const ph = this.photosOf(placeId)[0]; return ph && ph.likes >= 0 ? ph : null; },
@@ -133,7 +133,7 @@ const remote = {
     if (error) return { ok: false, reason: serverErr(error) };
     if (!data.ok) return { ok: false, reason: data.reason || '도장을 찍지 못했어요', already: data.code === 'already' };
     const t = kstToday(), s = this.stamps[placeId] || { count: 0, first: t, last: null }; s.count = data.visit_no; s.last = t;
-    const kh = new Date(Date.now() + 9 * 3600e3).getUTCHours(); if (kh >= 5 && kh < 7) s.dawn = true; s.days = [...new Set([...(s.days || []), t])]; s.months = [...new Set([...(s.months || []), +t.slice(5, 7)])];
+    const kh = new Date(Date.now() + 9 * 3600e3).getUTCHours(); if (kh >= 5 && kh < 7) { s.dawn = true; s.dawnDays = [...new Set([...(s.dawnDays || []), t])]; } s.days = [...new Set([...(s.days || []), t])]; s.months = [...new Set([...(s.months || []), +t.slice(5, 7)])];
     this.stamps[placeId] = s;
     return { ok: true, visitNo: data.visit_no, stamp: s };
   },

@@ -1,6 +1,6 @@
 /* 앱 설정. Supabase 값을 채우면 서버 모드, 비우면 로컬 모드(기기 안에만 저장) */
 window.APP_CONFIG = {
-  version: '0.32',          // 내 정보 하단에 표시. 배포마다 올린다
+  version: '0.33',          // 내 정보 하단에 표시. 배포마다 올린다
   supabaseUrl: '',          // 예: 'https://xxxx.supabase.co'
   supabaseAnonKey: '',      // Supabase 프로젝트 anon public key
   tiles: 'https://tiles.openfreemap.org/planet', // OpenStreetMap 벡터 타일 (OpenFreeMap, 키 불필요)

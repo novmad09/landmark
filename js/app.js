@@ -198,7 +198,7 @@ function scopeSummary(stamps) {
 function allSeen() { const out = {}, st = store.allStamps(); Object.entries(window.Memory.places()).forEach(([id, m]) => { out[id] = { ...m, count: Math.max(1, m.days.length), mem: true }; }); /* 사진 장수가 아니라 간 날 수 */
   Object.entries(st).forEach(([id, s]) => { const m = out[id]; out[id] = m && m.days.length ? { ...s, days: [...new Set([...(s.days && s.days.length ? s.days : [s.first, s.last]), ...m.days])].filter(Boolean) } : s; }); return out; } /* 도장 찍은 곳도 예전 사진 날짜의 여행은 남긴다 */
 function renderDogam() {
-  const stamps = allSeen();
+  Nudge.absorb(); Nudge.promote(); const stamps = allSeen();
   const visited = L.filter(p => stamps[p.id]).length, view = DG.view, mine = view === 'mine', tripsV = view === 'trips';
   const trips = tripsOf('trip'), plans = tripsOf('plan'), auto = autoTrips(stamps);
   ['dgMine', 'dgTrips', 'dgAll'].forEach((id, k) => $('#' + id).setAttribute('aria-selected', ['mine', 'trips', 'all'][k] === view));
@@ -457,9 +457,11 @@ const Nudge = {
   busy: false,
   log() { return LS.get('lm-sealed', {}); }, mark(date, v) { const l = this.log(); l[date] = v; LS.set('lm-sealed', l); },
   /* 계획을 다 돌았으면 조용히 여행으로 바꾼다 */
-  promote() { const stamps = store.allStamps(); const done = [];
-    Trips.all().filter(t => t.kind === 'plan' && t.ids.length && t.ids.every(id => stamps[id])).forEach(t => { Trips.update(t.id, { kind: 'trip', doneAt: kstToday() }); done.push(t); });
+  promote() { const stamps = allSeen(); const done = []; /* 추억 사진으로 다녀온 곳도 '다녀옴'으로 친다 */
+    Trips.all().filter(t => t.kind === 'plan' && t.ids.length && t.ids.every(id => stamps[id])).forEach(t => { Trips.update(t.id, { kind: 'trip', doneAt: t.ids.map(id => stamps[id].last).filter(Boolean).sort().at(-1) || kstToday() }); done.push(t); }); /* 마지막으로 다녀온 날 */
     return done; },
+  /* 이미 저장된 그날 여행이 있으면, 같은 날 다른 명소(나중에 넣은 추억 사진 등)는 새 카드 대신 그 여행에 붙인다. 한 번 붙였던 곳은 빼도 다시 안 붙인다 */
+  absorb() { autoTrips(allSeen()).forEach(a => { const ex = Trips.all().find(t => t.kind === 'trip' && t.doneAt === a.date && !t.guideId); if (!ex) return; const seen = new Set([...ex.ids, ...(ex.memMerged || [])]); const add = a.ids.filter(id => !seen.has(id)); if (add.length) Trips.update(ex.id, { ids: [...ex.ids, ...add], memMerged: [...(ex.memMerged || []), ...add] }); }); },
   /* 그날 찍은 도장을 여행으로 굳힌다 */
   seal(date) { const a = autoTrips(store.allStamps()).find(t => t.date === date); if (!a || !a.ids.length) return null;
     const ex = Trips.all().find(t => t.kind === 'trip' && t.doneAt === date && !t.guideId); /* 그날 여행이 이미 있으면(22시 뒤에 더 찍은 경우) 거기에 붙인다 */
