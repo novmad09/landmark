@@ -38,10 +38,13 @@ function mapStyle() {
     { id: 'guide-line', type: 'line', source: 'guide', layout: { 'line-cap': 'round' }, paint: { 'line-color': ['get', 'c'], 'line-width': 3, 'line-dasharray': [2, 2] } },
     { id: 'radius-fill', type: 'fill', source: 'radius', paint: { 'fill-color': ['get', 'c'], 'fill-opacity': 0.14 } },
     { id: 'radius-line', type: 'line', source: 'radius', paint: { 'line-color': ['get', 'c'], 'line-width': 2, 'line-dasharray': [3, 2.5] } },
+    { id: 'mem-dot', type: 'circle', source: 'mem', paint: { 'circle-color': '#F06292', 'circle-opacity': 0.85, 'circle-stroke-color': '#fff', 'circle-stroke-width': 2, 'circle-radius': ['case', ['has', 'point_count'], ['interpolate', ['linear'], ['get', 'point_count'], 2, 9, 20, 15, 200, 22], 6] } },
   ] };
 }
 const emptyFC = () => ({ type: 'FeatureCollection', features: [] });
-const styleWithSources = () => { const s = mapStyle(); s.sources.guide = { type: 'geojson', data: emptyFC() }; s.sources.radius = { type: 'geojson', data: emptyFC() }; s.sources.regions = { type: 'geojson', data: window.REGIONS || emptyFC() }; return s; };
+const styleWithSources = () => { const s = mapStyle(); s.sources.guide = { type: 'geojson', data: emptyFC() }; s.sources.radius = { type: 'geojson', data: emptyFC() }; s.sources.regions = { type: 'geojson', data: window.REGIONS || emptyFC() }; s.sources.mem = { type: 'geojson', data: memFC(), cluster: true, clusterRadius: 44, clusterMaxZoom: 15 }; return s; };
+/* 명소 밖에서 찍은 추억 사진: 분홍 점, 많을수록 크게 */
+const memFC = () => ({ type: 'FeatureCollection', features: (window.Memory ? window.Memory.loose() : []).map(m => ({ type: 'Feature', properties: { id: m.id }, geometry: { type: 'Point', coordinates: [m.lng, m.lat] } })) });
 
 /* 랜드마크 → 시군구 코드 (점-다각형 포함 판정) */
 function pip(pt, ring) { let inside = false; for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) { const xi = ring[i][0], yi = ring[i][1], xj = ring[j][0], yj = ring[j][1]; if (((yi > pt[1]) !== (yj > pt[1])) && (pt[0] < (xj - xi) * (pt[1] - yi) / (yj - yi) + xi)) inside = !inside; } return inside; }
@@ -52,12 +55,12 @@ function regionOf(p) { const R = window.REGIONS; if (!R) return null; const pt =
   return bd < 0.05 ** 2 ? best : null; } // 해안선 밖(케이블카·해수욕장)은 가장 가까운 시군구로
 const REGION_OF = {}; L.forEach(p => { const f = regionOf(p); if (f) { p.rg = f.properties.code; p.rgName = f.properties.name; } });
 window.REGION_NAME = code => { const f = (window.REGIONS?.features || []).find(f => f.properties.code === code); return f ? f.properties.name : ''; };
-function regionStats() { const g = {}; L.forEach(p => { if (!p.rg) return; const s = g[p.rg] || (g[p.rg] = { total: 0, done: 0, name: p.rgName }); s.total++; if (visited(p.id)) s.done++; }); return g; }
+function regionStats() { const g = {}; L.forEach(p => { if (!p.rg) return; const s = g[p.rg] || (g[p.rg] = { total: 0, done: 0, name: p.rgName }); s.total++; if (been(p.id)) s.done++; }); return g; }
 function paintRegions() { if (!map.getSource('regions')) return; const g = regionStats(); const done = [], part = [];
   Object.entries(g).forEach(([c, s]) => { if (s.done === s.total) done.push(c); else if (s.done > 0) part.push(c); });
   map.setFilter('region-done', ['in', ['get', 'code'], ['literal', done]]); map.setFilter('region-done-line', ['in', ['get', 'code'], ['literal', done]]); map.setFilter('region-part', ['in', ['get', 'code'], ['literal', part]]); }
 
-let map, store, S, mapEl, ov, pool = new Map(), meEl, raf = null, movedFlag = false, onStamp, onDetail, onNear, onAddTrip, onPhoto, onGallery, onLoginNeeded, onUndo, onStampInfo, toastFn;
+let map, store, S, mapEl, ov, pool = new Map(), meEl, raf = null, movedFlag = false, onStamp, onDetail, onNear, onAddTrip, onPhoto, onGallery, onLoginNeeded, onUndo, onStampInfo, onMemPhotos, toastFn;
 /* 반경 진입 알림 (앱이 열려 있을 때). 같은 곳은 30분에 한 번만 */
 const nearSeen = {};
 function nearCheck() { if (!S.me || !onNear) return; const now = Date.now(); const today = window.Store.kstToday();
@@ -66,6 +69,8 @@ function nearCheck() { if (!S.me || !onNear) return; const now = Date.now(); con
 const mode = () => { if (S.trip) return 'near'; const z = map.getZoom(); return z < 7.6 ? 'nat' : z < 11.2 ? 'city' : 'near'; };
 const P = (lng, lat) => { const p = map.project([lng, lat]); return [p.x, p.y]; };
 const visited = id => !!store.stampsOf(id);
+const remembered = id => !!(window.Memory && window.Memory.of(id)); /* 사진으로 찾은 추억 도장 */
+const been = id => visited(id) || remembered(id);
 const inRange = p => S.me && dist(S.me, p) - Math.min(S.me.accuracy || 0, cfg.maxAccuracy) <= p.r;
 /* 지도 필터: 모음·종류·지역·방문 여부 */
 const FKEYS = ['set', 'cat', 'sido', 'gu', 'seen'];
@@ -74,8 +79,8 @@ function passes(p) { const f = S.filter;
   if (f.cat && p.cat !== f.cat) return false;
   if (f.sido && p.sido !== f.sido) return false;
   if (f.gu && p.gu !== f.gu) return false;
-  if (f.seen === 'yes' && !visited(p.id)) return false;
-  if (f.seen === 'no' && visited(p.id)) return false;
+  if (f.seen === 'yes' && !been(p.id)) return false;
+  if (f.seen === 'no' && been(p.id)) return false;
   return true; }
 const filterCount = () => FKEYS.filter(k => S.filter[k]).length;
 /* 지금 지도에 보일 랜드마크 */
@@ -101,10 +106,10 @@ function merge(list, thr, r) { const out = [];
 function renderOverlay() {
   if (!map.loaded() && !map._loaded) {}
   const its = items(), seen = new Set(), m = mode();
-  its.forEach(it => { seen.add(it.key); let el = pool.get(it.key); const v = it.ms.filter(p => visited(p.id)).length, n = it.ms.length;
-    if (it.type === 'pin') { const p = it.ms[0], st = visited(p.id) ? 'visited' : inRange(p) ? 'avail' : '', sig = `pin|${st}|${S.sel === p.id}`;
+  its.forEach(it => { seen.add(it.key); let el = pool.get(it.key); const v = it.ms.filter(p => been(p.id)).length, n = it.ms.length;
+    if (it.type === 'pin') { const p = it.ms[0], st = visited(p.id) ? 'visited' : inRange(p) ? 'avail' : remembered(p.id) ? 'memory' : '', sig = `pin|${st}|${S.sel === p.id}`;
       if (!el) { el = document.createElement('button'); el.type = 'button'; el.className = 'lm'; el.addEventListener('click', onTap); ov.appendChild(el); pool.set(it.key, el); }
-      if (el._sig !== sig) { el.className = `lm ${st} ${S.sel === p.id ? 'sel' : ''}`; el.style.setProperty('--c', `var(--c-${p.cat})`); el.innerHTML = `<span class="card">${ICON[p.cat]}</span><span class="nm">${p.name}</span>`; el.setAttribute('aria-label', `${p.name}${visited(p.id) ? ', 도장 찍음' : ''}`); el._sig = sig; }
+      if (el._sig !== sig) { el.className = `lm ${st} ${S.sel === p.id ? 'sel' : ''}`; el.style.setProperty('--c', `var(--c-${p.cat})`); el.innerHTML = `<span class="card">${ICON[p.cat]}</span><span class="nm">${p.name}</span>`; el.setAttribute('aria-label', `${p.name}${visited(p.id) ? ', 도장 찍음' : remembered(p.id) ? ', 추억 사진 있음' : ''}`); el._sig = sig; }
       el.style.transform = `translate(${it.x - 23}px,${it.y - 23}px)`;
     } else { const label = it.label || `${n}곳`, cls = `cl ${v === n ? 'done' : v ? 'has' : ''} ${it.label ? '' : 'small'}`, sig = `cl|${label}|${v}/${n}|${cls}`;
       if (!el) { el = document.createElement('button'); el.type = 'button'; el.addEventListener('click', onTap); ov.appendChild(el); pool.set(it.key, el); }
@@ -119,6 +124,9 @@ function renderOverlay() {
   drawGeo();
 }
 let geoSig = '';
+function openMem(f) { const src = map.getSource('mem'); const done = ids => onMemPhotos && onMemPhotos(ids);
+  if (f.properties.cluster) src.getClusterLeaves(f.properties.cluster_id, 500, 0).then(fs => done(fs.map(x => x.properties.id))).catch(() => {}); else done([f.properties.id]); }
+function refreshMem() { const s = map && map.getSource('mem'); if (s) s.setData(memFC()); renderUI(); dirty(); paintRegions(); }
 function drawGeo() {
   const g = map.getSource('guide'), rs = map.getSource('radius'); if (!g || !rs) return;
   // 내용이 그대로면 다시 올리지 않는다
@@ -182,7 +190,7 @@ function routeUrl(p) { const me = S.me; const dn = encodeURIComponent(p.name.rep
   return me ? `https://map.naver.com/p/directions/${me.lng},${me.lat},${encodeURIComponent('내 위치')}/${p.lng},${p.lat},${dn}/-/transit` : `https://map.naver.com/p/search/${dn}`; }
 /* ---------- 상단 UI ---------- */
 function renderUI() {
-  const v = L.filter(p => visited(p.id)).length, pct = Math.round(v / L.length * 100);
+  const v = L.filter(p => been(p.id)).length, pct = Math.round(v / L.length * 100); /* 현장 도장 + 추억 도장 */
   document.getElementById('progress').innerHTML = `<span>랜드마크${cfg.testMode ? '<span class="testbadge">테스트</span>' : ''}<b>${v} / ${L.length}곳</b></span><span class="ring" style="background:conic-gradient(var(--brand) ${pct}%,var(--line) 0)"><i>${pct}%</i></span>`;
   const box = document.getElementById('near');
   if (!S.me) { box.innerHTML = `<button type="button" class="nb"><small>내 위치를 켜면</small>가까운 곳을 알려드려요</button>`; box.querySelector('.nb').onclick = startGPS; return; }
@@ -255,7 +263,7 @@ function startGPS(first) {
 
 /* ---------- 초기화 ---------- */
 function init(opts) {
-  store = opts.store; onStamp = opts.onStamp; onDetail = opts.onDetail; onNear = opts.onNear; onAddTrip = opts.onAddTrip; onPhoto = opts.onPhoto; onGallery = opts.onGallery; onUndo = opts.onUndo; onStampInfo = opts.onStampInfo; toastFn = opts.toast || (() => {});
+  store = opts.store; onStamp = opts.onStamp; onDetail = opts.onDetail; onNear = opts.onNear; onAddTrip = opts.onAddTrip; onPhoto = opts.onPhoto; onGallery = opts.onGallery; onUndo = opts.onUndo; onStampInfo = opts.onStampInfo; onMemPhotos = opts.onMemPhotos; toastFn = opts.toast || (() => {});
   mapEl = document.getElementById('map'); ov = document.getElementById('ov');
   let last = null; try { last = JSON.parse(localStorage.getItem('lm-lastpos')); } catch (e) {}
   S = { me: last, live: false, accuracyOk: false, sel: null, filter: { set: '', cat: '', sido: '', gu: '', seen: '' } };
@@ -267,7 +275,8 @@ function init(opts) {
   map.on('move', dirty); map.on('resize', dirty); map.on('load', () => { paintRegions(); dirty(); }); map.on('style.load', () => { tokCache = {}; geoSig = ''; setTimeout(() => { paintRegions(); drawGeo(); }, 0); }); /* 테마가 바뀌면 선·반경도 다시 */
   let regionsPainted = false; map.on('sourcedata', e => { if (e.sourceId === 'regions' && !regionsPainted && map.getLayer('region-done')) { regionsPainted = true; paintRegions(); } });
   map.on('dragstart', () => movedFlag = true); map.on('zoomstart', () => movedFlag = true); map.on('moveend', () => setTimeout(() => movedFlag = false, 0));
-  map.on('click', () => { if (S.sel) closeSheet(); });
+  map.on('click', e => { const f = map.queryRenderedFeatures(e.point, { layers: ['mem-dot'] })[0]; if (f) { openMem(f); return; } if (S.sel) closeSheet(); });
+  map.on('mouseenter', 'mem-dot', () => { map.getCanvas().style.cursor = 'pointer'; }); map.on('mouseleave', 'mem-dot', () => { map.getCanvas().style.cursor = ''; });
   const mq = matchMedia('(prefers-color-scheme: dark)'); mq.addEventListener('change', () => map.setStyle(styleWithSources()));
   new MutationObserver(() => map.setStyle(styleWithSources())).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
   document.getElementById('closeSheet').onclick = closeSheet;
@@ -291,7 +300,7 @@ function init(opts) {
     const done = v => { ov.hidden = true; res(v); }; document.getElementById('pickNo').onclick = () => done(null); document.getElementById('pickOk').onclick = () => { const c = map.getCenter(); done({ lat: +c.lat.toFixed(6), lng: +c.lng.toFixed(6) }); }; }); },
   /* 지금 보고 있는 지역: 전국 보기면 전국, 시·도 보기면 시·도, 더 들어가 있으면 시·군·구 */
   region() { const md = mode(); if (md === 'nat' && !S.trip) return {}; const c = map.getCenter(); const near = L.map(p => ({ p, d: dist({ lat: c.lat, lng: c.lng }, p) })).sort((a, b) => a.d - b.d)[0]; if (!near || near.d > 80000) return {}; if (md === 'city') return { sido: near.p.sido }; const n = L.filter(p => p.sido === near.p.sido && p.gu === near.p.gu).length; return n >= 5 ? { sido: near.p.sido, gu: near.p.gu } : { sido: near.p.sido }; }, // 시·군·구에 5곳 미만이면 시·도로
-  splitDesc, setFilter(f) { Object.assign(S.filter, { set: '', cat: '', sido: '', gu: '', seen: '' }, f); renderFilterBtn(); renderUI(); for (const [k, e] of pool) { e.remove(); pool.delete(k); } dirty(); }, showTrip, refresh() { renderUI(); if (S.sel) select(S.sel); paintRegions(); dirty(); }, regionStats, select, closeSheet, focus(id) { const p = byId(id); map.flyTo({ center: [p.lng, p.lat], zoom: 14 }); select(id); }, resize() { map.resize(); dirty(); }, pos: () => S.me, ICON, fmt, routeUrl };
+  splitDesc, refreshMem, setFilter(f) { Object.assign(S.filter, { set: '', cat: '', sido: '', gu: '', seen: '' }, f); renderFilterBtn(); renderUI(); for (const [k, e] of pool) { e.remove(); pool.delete(k); } dirty(); }, showTrip, refresh() { renderUI(); if (S.sel) select(S.sel); paintRegions(); dirty(); }, regionStats, select, closeSheet, focus(id) { const p = byId(id); map.flyTo({ center: [p.lng, p.lat], zoom: 14 }); select(id); }, resize() { map.resize(); dirty(); }, pos: () => S.me, ICON, fmt, routeUrl };
 }
 return { init };
 })();

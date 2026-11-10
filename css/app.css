@@ -720,3 +720,16 @@ p.spot{margin:0 16px 2px}
 .screen.scroll{overflow-x:hidden;overflow-y:auto}
 .detail,.sheet,.login .box{overflow-x:hidden}
 .onb .note a{color:#fff;text-decoration:underline}
+/* 추억 도장(사진으로 찾은 곳): 분홍 테두리 */
+.lm.memory .card{background:#FCE4EC;border-color:#F06292;border-style:solid;color:#C2185B}
+.lm.memory .nm{color:#AD1457}
+.cell.memory .st{background:#FCE4EC;color:#C2185B;border:2px solid #F06292}
+.memsec{margin:14px 16px 0}.memsec h3{margin:0 0 8px;font-size:17px}.memsec h3 small{font-weight:500;color:var(--ink-soft);font-size:13.5px;margin-left:4px}
+.memstrip{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;margin-bottom:8px;scroll-snap-type:x proximity}
+.memstrip button{all:unset;position:relative;flex:none;width:104px;height:104px;border-radius:12px;overflow:hidden;background:var(--bg);cursor:pointer;scroll-snap-align:start;display:grid;place-items:center;color:var(--ink-soft);font-size:13px}
+.memstrip img{width:100%;height:100%;object-fit:cover;display:block}
+.memstrip i{position:absolute;left:4px;bottom:4px;font-style:normal;font-size:11.5px;color:#fff;background:rgba(0,0,0,.55);padding:1px 6px;border-radius:999px}
+.memsec .btn{width:100%}
+.memprog .bar{height:10px;border-radius:999px;background:var(--line);overflow:hidden}.memprog .bar i{display:block;height:100%;width:0;background:var(--brand);transition:width .15s}
+.memintro .box,.memres .box{text-align:center}.mi-ic{font-size:44px}
+.memsum{list-style:none;margin:0;padding:0;display:grid;gap:6px;text-align:left}.memsum li{background:var(--bg);border-radius:10px;padding:8px 12px;font-size:15px}

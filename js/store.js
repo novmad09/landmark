@@ -54,6 +54,7 @@ const Safety = {
 async function wipeAll() {
   if (remote.sb && remote.session) { const { error } = await remote.sb.rpc('delete_my_account'); if (error) throw new Error('서버 기록을 지우지 못했어요. 인터넷을 확인하고 다시 시도해 주세요'); await remote.sb.auth.signOut().catch(() => {}); } /* 서버부터, 실패하면 아무것도 안 지운다 */
   try { Object.keys(localStorage).filter(k => k.startsWith('lm-')).forEach(k => localStorage.removeItem(k)); } catch (e) {}
+  try { if (window.Memory) await window.Memory.wipe(); } catch (e) {}
   try { if (idb.db) { idb.db.close(); idb.db = null; } await new Promise(res => { const r = indexedDB.deleteDatabase('landmark-stamp'); r.onsuccess = r.onerror = r.onblocked = () => res(); }); } catch (e) {}
 }
 /* ---------- 로컬 모드 ---------- */
