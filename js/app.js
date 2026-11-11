@@ -47,11 +47,9 @@ function pickFiles(any) { return new Promise(res => { const i = document.createE
   const fin = v => { res(v); i.remove(); }; i.onchange = () => fin([...(i.files || [])]); i.oncancel = () => fin([]); i.click(); }); }
 /* 사진 넣는 방법 고르기: 하나씩 / 알아서 */
 function memChoose(opts) { const el = document.createElement('div'); el.className = 'login memchoose';
-  el.innerHTML = `<div class="box"><h2>사진을 어떻게 넣을까요?</h2>
-    <button class="choice" type="button" id="mcOne"><b>하나씩</b><span>넣고 싶은 사진만 골라요</span></button>
-    <button class="choice" type="button" id="mcAuto"><b>알아서</b><span>사진 폴더를 통째로 읽어 다녀온 곳을 찾아요</span></button>
-    <p class="note">사진은 보지 않고 위치와 날짜만 확인해요</p><button class="btn ghost cancel" type="button">닫기</button></div>`;
-  document.getElementById('app').appendChild(el); el.querySelector('.cancel').onclick = () => el.remove();
+  el.innerHTML = `<div class="box"><h2>사진을 어떻게 넣을까요?</h2><p class="note">사진은 보지 않고 위치와 날짜만 확인해요</p>
+    <button class="btn primary" type="button" id="mcAuto">AI에게 맡길게요</button><button class="btn ghost" type="button" id="mcOne">직접 하나씩 할게요</button></div>`;
+  document.getElementById('app').appendChild(el); el.onclick = e => { if (e.target === el) el.remove(); };
   el.querySelector('#mcOne').onclick = () => { el.remove(); memImport({ ...opts, pick: true }); }; el.querySelector('#mcAuto').onclick = () => { el.remove(); memAuto(opts); }; }
 /* 폴더 안의 사진을 전부 모은다 (하위 폴더 포함) */
 async function folderFiles(onCount) {

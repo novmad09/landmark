@@ -748,8 +748,5 @@ p.spot{margin:0 16px 2px}
 .dg-search input::placeholder{font-size:15px}
 .tenote{margin:0 16px 12px;text-align:center}
 
-/* 사진 넣는 방법 고르기 · 알아서 찾기 준비 화면 */
-.memchoose .choice{display:flex;flex-direction:column;gap:4px;align-items:flex-start;text-align:left;width:100%;padding:14px 16px;border-radius:14px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink);font:inherit;cursor:pointer}
-.memchoose .choice b{font-size:17px}.memchoose .choice span{font-size:14px;color:var(--ink-soft);line-height:1.45}
-.memchoose .choice:active{border-color:var(--brand)}
-.memready .box{text-align:center}.mrnames{margin:0;font-size:15px;color:var(--ink-soft);line-height:1.55}
+/* 알아서 찾기 준비 화면 */
+.memchoose .box{text-align:center}.memready .box{text-align:center}.mrnames{margin:0;font-size:15px;color:var(--ink-soft);line-height:1.55}
