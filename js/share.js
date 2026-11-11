@@ -26,7 +26,7 @@ function seal(g, cx, cy, r, text, color) {
   g.beginPath(); for (let k = 0; k <= 160; k++) { const a = k / 160 * Math.PI * 2, w = 1 + Math.sin(a * 3 + ph1) * 0.018 + Math.sin(a * 5 + ph2) * 0.012; const x = Math.cos(a) * r * w, y = Math.sin(a) * r * w; k ? g.lineTo(x, y) : g.moveTo(x, y); }
   g.closePath(); g.lineWidth = r * 0.12; g.strokeStyle = color || RED; g.stroke();
   g.fillStyle = color || RED; g.textAlign = 'center'; g.textBaseline = 'middle';
-  const f = window.sealFit(text, r, true); g.font = DISP(f.size); f.lines.forEach((l, i) => g.fillText(l, 0, (i - (f.lines.length - 1) / 2) * f.lh));
+  const f = window.sealFit(text, r, true, true); g.font = DISP(f.size); f.lines.forEach((l, i) => g.fillText(l, 0, (i - (f.lines.length - 1) / 2) * f.lh));
   g.globalCompositeOperation = 'destination-out';
   for (let i = 0; i < 90; i++) { const a = Math.random() * Math.PI * 2, rr = r * Math.random(); g.globalAlpha = Math.random() * 0.45; g.beginPath(); g.arc(Math.cos(a) * rr, Math.sin(a) * rr, Math.random() * r * 0.035, 0, Math.PI * 2); g.fill(); }
   g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; g.restore();

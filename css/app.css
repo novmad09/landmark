@@ -759,3 +759,5 @@ p.spot{margin:0 16px 2px}
 .nearb{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;overflow:visible}
 .nb2{width:auto;min-width:0}.nb2 svg{max-width:100%;height:auto}.nb2 span,.nb2 small{max-width:100%;overflow-wrap:anywhere}
 .grp-t b{min-width:0;overflow-wrap:anywhere}
+/* 이름이 긴 명소: 가로로 긴 도장 */
+.sealbtn.wide{width:calc(var(--sr) * 3.1);max-width:62vw}
