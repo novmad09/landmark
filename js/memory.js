@@ -22,13 +22,14 @@
   const match = (lat, lng) => { let best = null, bd = Infinity; for (const p of L) { const d = dist({ lat, lng }, p); if (d <= memR(p) && d < bd) { best = p; bd = d; } } return best; };
   const kst = ms => new Date(ms + 9 * 3600e3).toISOString().slice(0, 10);
 
-  let list = [], urls = new Map(), busy = false;
+  let list = [], urls = new Map(), busy = false; const rc = new Map(); /* 미리 살펴본 사진의 위치·날짜 (확인 누르면 다시 안 읽게) */
+  const isImg = f => /^image\//.test(f.type) || /\.(jpe?g|heic|heif|png|webp)$/i.test(f.name); const keyOf = f => `${f.name}|${f.size}|${f.lastModified}`;
   const url = m => { if (!m.thumb) return ''; let u = urls.get(m.id); if (!u) { u = URL.createObjectURL(m.thumb); urls.set(m.id, u); } return u; };
 
-  async function thumb(file) {
+  async function thumb(file, size) { size = size || 480;
     try {
-      let bmp; try { bmp = await createImageBitmap(file, { resizeWidth: 640, resizeQuality: 'medium' }); } catch (e) { bmp = await createImageBitmap(file); } /* 큰 사진을 통째로 풀지 않게 줄여서 연다 */
-      const k = Math.min(1, 480 / Math.max(bmp.width, bmp.height));
+      let bmp; try { bmp = await createImageBitmap(file, { resizeWidth: Math.round(size * 1.33), resizeQuality: 'medium' }); } catch (e) { bmp = await createImageBitmap(file); } /* 큰 사진을 통째로 풀지 않게 줄여서 연다 */
+      const k = Math.min(1, size / Math.max(bmp.width, bmp.height));
       const c = document.createElement('canvas'); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
       c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height); bmp.close && bmp.close();
       return await new Promise(r => c.toBlob(b => r(b), 'image/jpeg', 0.72));
@@ -57,26 +58,39 @@
     url, dist, memR, kst,
     item(m, extra) { const p = m.placeId && L.find(x => x.id === m.placeId); return { url: url(m), cap: `${p ? p.name + ' · ' : ''}${kst(m.at).replaceAll('-', '.')}${m.src === 'manual' ? ' · 직접 추가' : ''}`, mem: m, ...(extra || {}) }; },
     /* 여러 장 불러오기. onProg(i, n). 같은 사진(이름·크기·수정시각)은 건너뛴다 */
-    busy: () => busy,
+    busy: () => busy, isImg,
+    /* 미리 살펴보기: 아무것도 저장하지 않고, 넣으면 어떻게 될지만 센다. ctl.stop 이 켜지면 멈춘다 */
+    async scan(files, onProg, ctl) {
+      if (busy) throw new Error('busy'); busy = true; try {
+      const have = new Map(list.map(m => [m.key, m])); const seen = new Set(); const res = { total: 0, known: 0, matched: 0, loose: 0, noLoc: 0, places: {}, files: [], stopped: false };
+      const arr = [...files]; for (let i = 0; i < arr.length; i++) { if (ctl && ctl.stop) { res.stopped = true; break; }
+        const f = arr[i]; if (i % 5 === 0) { onProg && onProg(i, arr.length, res); await new Promise(r => setTimeout(r, 0)); } if (!isImg(f)) continue; const key = keyOf(f); if (seen.has(key)) continue; seen.add(key); res.total++;
+        const old = have.get(key); if (old && old.lat != null) { res.known++; continue; }
+        const r = await read(f); rc.set(key, r); if (!r.gps) { res.noLoc++; continue; }
+        const p = match(r.gps.lat, r.gps.lng); if (p) { res.matched++; res.places[p.id] = (res.places[p.id] || 0) + 1; } else res.loose++; res.files.push(f); }
+      onProg && onProg(arr.length, arr.length, res); return res;
+      } finally { busy = false; } },
+    clearScan: () => rc.clear(),
     async import(files, onProg, opts) {
       if (busy) throw new Error('busy'); busy = true; try {
       const have = new Set(list.map(m => m.key)); const add = []; const res = { added: 0, skipped: 0, matched: 0, loose: 0, noLoc: 0, places: new Set(), rejected: 0 };
       const arr = [...files]; for (let i = 0; i < arr.length; i++) {
-        const f = arr[i]; onProg && onProg(i, arr.length); if (!/^image\//.test(f.type) && !/\.(jpe?g|heic|heif|png|webp)$/i.test(f.name)) continue;
-        const key = `${f.name}|${f.size}|${f.lastModified}`;
+        const f = arr[i]; onProg && onProg(i, arr.length); if (!isImg(f)) continue;
+        const key = keyOf(f);
         if (have.has(key)) { /* 이미 있는 사진: 명소 인증이면, 아직 어디에도 안 붙은 사진만 그 명소에 붙여 준다 */
           const old = list.find(m => m.key === key), tp = opts && opts.placeId && L.find(x => x.id === opts.placeId);
           if (old && tp && !old.placeId) { if (old.lat != null && dist(old, tp) > memR(tp) * 3) { res.rejected++; continue; } old.placeId = tp.id; old.src = 'manual'; add.push(old); res.added++; res.matched++; res.places.add(tp.id); continue; }
-          if (old && old.lat == null) { const r2 = await read(f); if (r2.gps) { /* 지난번엔 위치 없이 들어온 사진: 이번에 위치가 있으면 채워 준다 */
+          if (old && old.lat == null) { const r2 = rc.get(key) || await read(f); if (r2.gps) { /* 지난번엔 위치 없이 들어온 사진: 이번에 위치가 있으면 채워 준다 */
             old.lat = r2.gps.lat; old.lng = r2.gps.lng; if (r2.exifDate) { old.at = r2.at; old.exifDate = true; } const p2 = old.placeId ? L.find(x => x.id === old.placeId) : match(old.lat, old.lng);
             if (p2) { old.placeId = p2.id; old.verified = true; res.matched++; res.places.add(p2.id); } else res.loose++; add.push(old); res.added++; res.fixed = (res.fixed || 0) + 1; continue; } }
           res.skipped++; continue; }
         have.add(key);
-        const r = await read(f); let p = r.gps ? match(r.gps.lat, r.gps.lng) : null;
+        const r = rc.get(key) || await read(f); let p = r.gps ? match(r.gps.lat, r.gps.lng) : null;
+        if (opts && opts.bulk && !r.gps) { res.noLoc++; continue; } /* 통째로 읽을 때는 위치 없는 사진은 넣지 않는다 */
         if (opts && opts.placeId) { const tp = L.find(x => x.id === opts.placeId);
           if (r.gps && tp && dist(r.gps, tp) > memR(tp) * 3) { res.rejected++; continue; } /* 위치가 전혀 다른 사진은 인증으로 안 받는다 */
           p = tp; }
-        const m = { id: 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7), key, at: r.at, exifDate: r.exifDate, lat: r.gps ? r.gps.lat : null, lng: r.gps ? r.gps.lng : null, placeId: p ? p.id : null, src: opts && opts.placeId ? 'manual' : 'auto', verified: !!(r.gps && p), thumb: await thumb(f), addedAt: Date.now() };
+        const m = { id: 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7), key, at: r.at, exifDate: r.exifDate, lat: r.gps ? r.gps.lat : null, lng: r.gps ? r.gps.lng : null, placeId: p ? p.id : null, src: opts && opts.placeId ? 'manual' : 'auto', verified: !!(r.gps && p), thumb: await thumb(f, opts && opts.bulk && !p ? 240 : 480), addedAt: Date.now() };
         add.push(m); res.added++; if (p) { res.matched++; res.places.add(p.id); } else if (r.gps) res.loose++; else res.noLoc++;
         if (add.length >= 25) { await db.putMany(add.splice(0)); }
       }

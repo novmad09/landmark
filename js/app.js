@@ -45,7 +45,52 @@ function bindMem(el, p, after) { const ms = window.Memory.photosOf(p.id);
 /* 사진 고르기 → 읽기(진행 표시) → 결과. placeId 가 있으면 그 명소 인증용 */
 function pickFiles(any) { return new Promise(res => { const i = document.createElement('input'); i.type = 'file'; i.multiple = true; if (!any) i.accept = 'image/*'; i.hidden = true; document.body.appendChild(i);
   const fin = v => { res(v); i.remove(); }; i.onchange = () => fin([...(i.files || [])]); i.oncancel = () => fin([]); i.click(); }); }
+/* 사진 넣는 방법 고르기: 하나씩 / 알아서 */
+function memChoose(opts) { const el = document.createElement('div'); el.className = 'login memchoose';
+  el.innerHTML = `<div class="box"><h2>사진을 어떻게 넣을까요?</h2>
+    <button class="choice" type="button" id="mcOne"><b>하나씩</b><span>넣고 싶은 사진만 골라요</span></button>
+    <button class="choice" type="button" id="mcAuto"><b>알아서</b><span>사진 폴더를 통째로 읽어 다녀온 곳을 찾아요</span></button>
+    <p class="note">사진은 보지 않고 위치와 날짜만 확인해요</p><button class="btn ghost cancel" type="button">닫기</button></div>`;
+  document.getElementById('app').appendChild(el); el.querySelector('.cancel').onclick = () => el.remove();
+  el.querySelector('#mcOne').onclick = () => { el.remove(); memImport({ ...opts, pick: true }); }; el.querySelector('#mcAuto').onclick = () => { el.remove(); memAuto(opts); }; }
+/* 폴더 안의 사진을 전부 모은다 (하위 폴더 포함) */
+async function folderFiles(onCount) {
+  if (window.showDirectoryPicker) { let dir; try { dir = await window.showDirectoryPicker({ id: 'lm-photos', mode: 'read', startIn: 'pictures' }); } catch (e) { return e && e.name === 'AbortError' ? [] : null; }
+    const out = []; const walk = async (d, depth) => { for await (const h of d.values()) { if (h.name.startsWith('.')) continue; /* 숨김·미리보기 폴더는 건너뛴다 */
+      if (h.kind === 'directory') { if (depth < 6) await walk(h, depth + 1); } else if (/\.(jpe?g|heic|heif|png|webp)$/i.test(h.name)) { try { out.push(await h.getFile()); } catch (e) {} if (out.length % 50 === 0) onCount && onCount(out.length); } } };
+    await walk(dir, 0); return out; }
+  const probe = document.createElement('input'); if (!('webkitdirectory' in probe)) return null;
+  return new Promise(res => { const i = probe; i.type = 'file'; i.webkitdirectory = true; i.multiple = true; i.hidden = true; document.body.appendChild(i);
+    const fin = v => { res(v); i.remove(); }; i.onchange = () => fin([...(i.files || [])].filter(f => !/(^|\/)\./.test(f.webkitRelativePath || ''))); i.oncancel = () => fin([]); i.click(); }); }
+/* 알아서: 폴더 통째로 읽기 → 준비(미리 살펴보기) → 확인 누르면 지도에 찍기 */
+async function memAuto(opts) { opts = opts || {}; if (window.Memory.busy()) return null;
+  if (!(await ask({ title: '사진 폴더를 골라 주세요', text: '다음 화면에서 사진이 들어 있는 폴더(보통 DCIM 안의 Camera)를 열고 \'이 폴더 사용\'을 눌러 주세요. 처음 한 번만 물어봐요.', yes: '폴더 고르기', no: '취소' }))) return null;
+  const el = document.createElement('div'); el.className = 'login memprog'; const ctl = { stop: false };
+  el.innerHTML = `<div class="box"><h2>사진을 모으는 중…</h2><div class="bar"><i></i></div><p class="note" id="mpN">잠시만요</p><p class="note">사진은 보지 않고 위치와 날짜만 확인해요</p><button class="btn ghost" type="button" id="mpStop" hidden>그만하기</button></div>`;
+  const N = t => { const n = el.querySelector('#mpN'); if (n) n.textContent = t; };
+  document.getElementById('app').appendChild(el); const files = await folderFiles(n => N(`${n.toLocaleString()}장`));
+  if (files === null) { el.remove(); toast('이 폰에서는 폴더를 통째로 읽을 수 없어요. 사진을 골라 주세요'); return memImport({ ...opts, pick: true }); }
+  if (!files.length) { el.remove(); return null; }
+  el.querySelector('h2').textContent = '다녀온 곳을 찾는 중…'; const sb = el.querySelector('#mpStop'); sb.hidden = false; sb.onclick = () => { ctl.stop = true; sb.disabled = true; };
+  const prog = (i, n) => { el.querySelector('.bar i').style.width = `${Math.round(i / n * 100)}%`; N(`${i.toLocaleString()} / ${n.toLocaleString()}`); };
+  let s; try { s = await window.Memory.scan(files, prog, ctl); } catch (e) { el.remove(); toast('사진을 읽지 못했어요'); return null; }
+  const ids = Object.keys(s.places).sort((a, b) => s.places[b] - s.places[a]), nNew = ids.filter(id => !window.Memory.of(id) && !store.allStamps()[id]).length;
+  if (!s.files.length) { el.remove(); window.Memory.clearScan(); memResult({ added: 0, skipped: s.known, matched: 0, loose: 0, noLoc: s.noLoc, places: 0 }, opts); return null; }
+  /* 준비 끝: 아직 아무것도 저장하지 않았다. 확인을 눌러야 지도에 찍힌다 */
+  const ok = await new Promise(res => { const b = el.querySelector('.box'); el.classList.remove('memprog'); el.classList.add('memready');
+    b.innerHTML = `<h2>${ids.length ? `다녀온 명소 ${ids.length}곳을 찾았어요` : '지도에 올릴 사진을 찾았어요'}</h2>
+      ${ids.length ? `<p class="mrnames">${ids.slice(0, 6).map(id => esc(byId(id).name)).join(' · ')}${ids.length > 6 ? ` 외 ${ids.length - 6}곳` : ''}</p>` : ''}
+      <ul class="memsum">${s.matched ? `<li>명소 사진 <b>${s.matched.toLocaleString()}</b>장${nNew && nNew < ids.length ? ` · 새로 찾은 곳 <b>${nNew}</b>곳` : ''}</li>` : ''}${s.loose ? `<li>다른 곳 사진 <b>${s.loose.toLocaleString()}</b>장 · 지도에 분홍 점</li>` : ''}${s.noLoc ? `<li>위치 없는 사진 ${s.noLoc.toLocaleString()}장은 넣지 않아요</li>` : ''}${s.known ? `<li>이미 있는 사진 ${s.known.toLocaleString()}장은 그대로</li>` : ''}${s.stopped ? '<li>중간에 멈춰서 여기까지만 확인했어요</li>' : ''}</ul>
+      <p class="note">아직 지도에 넣지 않았어요. 확인을 누르면 추억 도장이 찍혀요.</p>
+      <button class="btn primary" type="button" id="mrGo">확인 · 지도에 찍기</button><button class="btn ghost cancel" type="button">넣지 않기</button>`;
+    b.querySelector('#mrGo').onclick = () => res(true); b.querySelector('.cancel').onclick = () => res(false); new MutationObserver((_, o) => { if (!el.isConnected) { o.disconnect(); res(false); } }).observe(document.getElementById('app'), { childList: true }); });
+  if (!ok) { el.remove(); window.Memory.clearScan(); return null; }
+  el.classList.remove('memready'); el.classList.add('memprog'); el.querySelector('.box').innerHTML = `<h2>지도에 찍는 중…</h2><div class="bar"><i></i></div><p class="note" id="mpN"></p>`;
+  let r; try { r = await window.Memory.import(s.files, prog, { bulk: true }); } catch (e) { el.remove(); window.Memory.clearScan(); mapS.refreshMem(); toast('사진을 넣지 못했어요. 저장 공간을 확인해 주세요'); return null; }
+  window.Memory.clearScan(); el.remove(); mapS.refreshMem(); mapS.refresh(); if (!screens.dogam.hidden) renderDogam(); if (!screens.me.hidden) renderMe();
+  r.noLoc = 0; r.skipped = s.known; memResult(r, opts); return r; }
 async function memImport(opts) { opts = opts || {};
+  if (!opts.placeId && !opts.any && !opts.pick) return memChoose(opts);
   if (window.Memory.busy()) return null; const files = await pickFiles(opts.any); if (!files.length || window.Memory.busy()) return null;
   const el = document.createElement('div'); el.className = 'login memprog'; el.innerHTML = `<div class="box"><h2>다녀온 곳을 찾는 중…</h2><div class="bar"><i></i></div><p class="note" id="mpN">0 / ${files.length}</p><p class="note">사진은 보지 않고 위치와 날짜만 확인해요</p></div>`; document.getElementById('app').appendChild(el);
   let r; try { r = await window.Memory.import(files, (i, n) => { el.querySelector('.bar i').style.width = `${Math.round(i / n * 100)}%`; el.querySelector('#mpN').textContent = `${i} / ${n}`; }, { placeId: opts.placeId }); }
@@ -93,7 +138,7 @@ const Back = (() => {
   let trapped = false, ignore = 0, timer = null;
   const openList = () => [...document.querySelectorAll(OV)].filter(e => e.id !== 'detail' || e.classList.contains('open'));
   const tab = () => { const c = document.querySelector('nav.tabs button[aria-current]'); return c ? c.dataset.tab : 'map'; };
-  const need = () => openList().length > 0 || document.getElementById('sheet').classList.contains('open') || tab() !== 'map';
+  let exitUntil = 0; const need = () => openList().length > 0 || document.getElementById('sheet').classList.contains('open') || tab() !== 'map' || Date.now() > exitUntil;
   const sync = () => { clearTimeout(timer); timer = setTimeout(() => { const n = need(); if (n && !trapped) { trapped = true; history.pushState({ trap: 1 }, ''); } else if (!n && trapped) { trapped = false; ignore++; history.back(); } }, 0); };
   const closeTop = () => { const list = openList(); const top = list[list.length - 1]; if (!top) { const sh = document.getElementById('sheet'); if (sh.classList.contains('open')) { mapS.closeSheet(); return true; } return false; }
     if (top.id === 'detail') { closeDetail(); return true; }
@@ -103,8 +148,10 @@ const Back = (() => {
   new MutationObserver(sync).observe(document.getElementById('app'), { childList: true });
   ['detail', 'sheet'].forEach(id => new MutationObserver(sync).observe(document.getElementById(id), { attributes: true, attributeFilter: ['class'] }));
   new MutationObserver(sync).observe(document.querySelector('nav.tabs'), { attributes: true, subtree: true, attributeFilter: ['aria-current'] });
-  window.addEventListener('popstate', () => { if (ignore > 0) { ignore--; return; } trapped = false; if (!closeTop() && tab() !== 'map') showTab('map'); sync(); });
-  return { sync };
+  /* 맨 바깥(지도)에서 뒤로: 바로 닫지 않고 한 번 더 누르면 닫힌다 */
+  window.addEventListener('popstate', () => { if (ignore > 0) { ignore--; return; } trapped = false; if (closeTop()) return sync(); if (tab() !== 'map') { showTab('map'); return sync(); }
+    exitUntil = Date.now() + 2200; toast('한 번 더 누르면 앱이 닫혀요'); setTimeout(sync, 2300); });
+  sync(); return { sync };
 })();
 /* 탭은 주소(#)에 적지 않는다: 뒤로 가기 기록과 엇갈리지 않게 */
 
