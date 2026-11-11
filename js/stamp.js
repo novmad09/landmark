@@ -1,8 +1,8 @@
 /* 도장 안에 명소 이름을 통째로 넣는다: 길면 2~3줄로 나누고 글자를 줄여 원 안에 맞춘다.
-   괄호 설명과 '·' 뒤는 뺀다 (예: "경주 대릉원·황리단길" → 경주 / 대릉원). R: 도장 반지름, noDate: 아래에 날짜가 없는 도장 */
+   글자는 하나도 빼지 않고 폰트 크기만 줄인다. R: 도장 반지름, noDate: 아래에 날짜가 없는 도장 */
 window.sealFit = (name, R, noDate) => {
-  const base = (String(name).replace(/\s*\(.*$/, '').split('·')[0].trim() || String(name)).slice(0, 14);
-  const words = base.split(/\s+/).filter(Boolean), flat = words.join(''), n = flat.length;
+  const base = String(name).trim(); /* 글자는 빼지 않는다. 길면 폰트만 줄인다 */
+  const words = base.replace(/\(/g, ' (').replace(/·/g, '· ').split(/\s+/).filter(Boolean), flat = words.join(''), n = flat.length;
   const bounds = new Set(), soft = new Set(); let acc = 0; words.forEach(w => { acc += w.length; bounds.add(acc); });
   /* 띄어쓰기가 없어도 뜻이 끊기는 자리(국립/중앙/박물관)를 찾는다 */
   const TOK = ['스페이스', '워크', '엑스더', '숲길', '옛길', '의언덕', '의다리', '호국', '평화', '천년', '주목', '메타세쿼이아', '카멜리아', '사려니', '머체왓', '산막이', '콰이강', '탑공원', '국가정원', '관광특구', '아쿠아리움', '어린이', '대공원', '드라마', '촬영장', '디자인', '플라자', '동대문', '남대문', '박람회', '엑스포', '올림픽', '월드컵', '도서관', '전통', '자연', '해양', '생태', '역사', '스카이', '밸리', '타운', '빌리지', '스테이션', '국립공원', '도립공원', '군립공원', '생태공원', '한옥마을', '벽화마을', '출렁다리', '스카이워크', '해수욕장', '케이블카', '모노레일', '테마파크', '관광단지', '관광지', '박물관', '미술관', '과학관', '기념관', '전시관', '문학관', '전망대', '수목원', '식물원', '동물원', '휴양림', '저수지', '유적지', '고분군', '민속촌', '리조트', '터미널', '스퀘어', '국립', '서울', '한강', '중앙', '공원', '타워', '해변', '마을', '시장', '폭포', '계곡', '동굴', '온천', '호수', '대교', '유적', '산성', '읍성', '향교', '서원', '랜드', '월드', '파크', '해상', '해안', '광장', '거리', '골목', '정원', '센터', '문화', '예술', '역사'];
@@ -14,9 +14,10 @@ window.sealFit = (name, R, noDate) => {
   if (n <= 6) tryCuts([]); /* 끊을 자리가 마땅찮은 짧은 이름은 한 줄로 */
   if (want >= 2 || n > 4) for (let a = 1; a < n; a++) tryCuts([a]);
   if (n >= 6) for (let a = 1; a < n - 1; a++) for (let b = a + 1; b < n; b++) tryCuts([a, b]);
+  if (n >= 13) for (let a = 1; a < n - 2; a++) for (let b = a + 1; b < n - 1; b++) for (let c = b + 1; c < n; c++) tryCuts([a, b, c]);
   if (want === 1) best = [flat];
   const L = best.length, maxLen = Math.max(...best.map(l => l.length));
-  const wf = L === 1 ? 1.6 : L === 2 ? 1.42 : 1.26, hf = noDate ? 1.25 : 0.95;
+  const wf = L === 1 ? 1.6 : L === 2 ? 1.42 : L === 3 ? 1.26 : 1.14, hf = noDate ? 1.25 : 0.95;
   const size = Math.min(R * 0.64, wf * R / Math.max(maxLen, 2) / 0.96, hf * R / (L * 1.1));
   return { lines: best, size, lh: size * 1.1, y0: noDate ? 0 : -R * 0.16, k: size / R };
 };
