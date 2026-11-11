@@ -26,7 +26,7 @@ function seal(g, cx, cy, r, text, color) {
   g.beginPath(); for (let k = 0; k <= 160; k++) { const a = k / 160 * Math.PI * 2, w = 1 + Math.sin(a * 3 + ph1) * 0.018 + Math.sin(a * 5 + ph2) * 0.012; const x = Math.cos(a) * r * w, y = Math.sin(a) * r * w; k ? g.lineTo(x, y) : g.moveTo(x, y); }
   g.closePath(); g.lineWidth = r * 0.12; g.strokeStyle = color || RED; g.stroke();
   g.fillStyle = color || RED; g.textAlign = 'center'; g.textBaseline = 'middle';
-  g.font = DISP(text.length >= 3 ? r * 0.52 : r * 0.64); g.fillText(text, 0, 0);
+  const f = window.sealFit(text, r, true); g.font = DISP(f.size); f.lines.forEach((l, i) => g.fillText(l, 0, (i - (f.lines.length - 1) / 2) * f.lh));
   g.globalCompositeOperation = 'destination-out';
   for (let i = 0; i < 90; i++) { const a = Math.random() * Math.PI * 2, rr = r * Math.random(); g.globalAlpha = Math.random() * 0.45; g.beginPath(); g.arc(Math.cos(a) * rr, Math.sin(a) * rr, Math.random() * r * 0.035, 0, Math.PI * 2); g.fill(); }
   g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; g.restore();
@@ -59,7 +59,7 @@ async function trip(t, ctx) {
   const gap = 52, R = Math.min(150, Math.floor(((W - PAD * 2) - (cols - 1) * gap) / (cols * 2)), Math.floor(((H - 300 - y) - (rows - 1) * gap) / (rows * 2)));
   const gridW = cols * R * 2 + (cols - 1) * gap, x0 = (W - gridW) / 2 + R;
   const gridH = rows * R * 2 + (rows - 1) * gap, top = y + 46 + Math.max(0, ((H - 230) - (y + 46) - gridH) / 2);
-  show.forEach((p, i) => seal(g, x0 + (i % cols) * (R * 2 + gap), top + R + Math.floor(i / cols) * (R * 2 + gap), R, short(p.name), RED));
+  show.forEach((p, i) => seal(g, x0 + (i % cols) * (R * 2 + gap), top + R + Math.floor(i / cols) * (R * 2 + gap), R, p.name, RED));
   let by = top + gridH + 64;
   if (went.length > 9) { g.fillStyle = 'rgba(28,26,23,.5)'; g.font = F(500, 32); g.fillText(`그리고 ${went.length - 9}곳 더`, W / 2, by); by += 52; }
   // 도장에 다 담지 못한 이름만 아래에 적는다

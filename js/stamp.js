@@ -1,3 +1,28 @@
+/* 도장 안에 명소 이름을 통째로 넣는다: 길면 2~3줄로 나누고 글자를 줄여 원 안에 맞춘다.
+   괄호 설명과 '·' 뒤는 뺀다 (예: "경주 대릉원·황리단길" → 경주 / 대릉원). R: 도장 반지름, noDate: 아래에 날짜가 없는 도장 */
+window.sealFit = (name, R, noDate) => {
+  const base = (String(name).replace(/\s*\(.*$/, '').split('·')[0].trim() || String(name)).slice(0, 14);
+  const words = base.split(/\s+/).filter(Boolean), flat = words.join(''), n = flat.length;
+  const bounds = new Set(), soft = new Set(); let acc = 0; words.forEach(w => { acc += w.length; bounds.add(acc); });
+  /* 띄어쓰기가 없어도 뜻이 끊기는 자리(국립/중앙/박물관)를 찾는다 */
+  const TOK = ['스페이스', '워크', '엑스더', '숲길', '옛길', '의언덕', '의다리', '호국', '평화', '천년', '주목', '메타세쿼이아', '카멜리아', '사려니', '머체왓', '산막이', '콰이강', '탑공원', '국가정원', '관광특구', '아쿠아리움', '어린이', '대공원', '드라마', '촬영장', '디자인', '플라자', '동대문', '남대문', '박람회', '엑스포', '올림픽', '월드컵', '도서관', '전통', '자연', '해양', '생태', '역사', '스카이', '밸리', '타운', '빌리지', '스테이션', '국립공원', '도립공원', '군립공원', '생태공원', '한옥마을', '벽화마을', '출렁다리', '스카이워크', '해수욕장', '케이블카', '모노레일', '테마파크', '관광단지', '관광지', '박물관', '미술관', '과학관', '기념관', '전시관', '문학관', '전망대', '수목원', '식물원', '동물원', '휴양림', '저수지', '유적지', '고분군', '민속촌', '리조트', '터미널', '스퀘어', '국립', '서울', '한강', '중앙', '공원', '타워', '해변', '마을', '시장', '폭포', '계곡', '동굴', '온천', '호수', '대교', '유적', '산성', '읍성', '향교', '서원', '랜드', '월드', '파크', '해상', '해안', '광장', '거리', '골목', '정원', '센터', '문화', '예술', '역사'];
+  TOK.forEach(t => { let i = flat.indexOf(t); while (i >= 0) { soft.add(i); soft.add(i + t.length); i = flat.indexOf(t, i + 1); } });
+  const want = n <= 4 ? 1 : n <= 10 ? 2 : 3; let best = [flat], bc = Infinity;
+  const tryCuts = cuts => { const ls = []; let p = 0; [...cuts, n].forEach(c => { ls.push(flat.slice(p, c)); p = c; }); const lens = ls.map(l => l.length);
+    const cost = Math.max(...lens) * 10 + cuts.reduce((v, c) => v + (bounds.has(c) ? 0 : soft.has(c) ? 8 : 25), 0) + [...bounds].filter(c => c < n && !cuts.includes(c)).length * 6 + lens.filter(l => l < 2).length * 30 + (Math.max(...lens) - Math.min(...lens)) + ls.length * 4;
+    if (cost < bc) { bc = cost; best = ls; } };
+  if (n <= 6) tryCuts([]); /* 끊을 자리가 마땅찮은 짧은 이름은 한 줄로 */
+  if (want >= 2 || n > 4) for (let a = 1; a < n; a++) tryCuts([a]);
+  if (n >= 6) for (let a = 1; a < n - 1; a++) for (let b = a + 1; b < n; b++) tryCuts([a, b]);
+  if (want === 1) best = [flat];
+  const L = best.length, maxLen = Math.max(...best.map(l => l.length));
+  const wf = L === 1 ? 1.6 : L === 2 ? 1.42 : 1.26, hf = noDate ? 1.25 : 0.95;
+  const size = Math.min(R * 0.64, wf * R / Math.max(maxLen, 2) / 0.96, hf * R / (L * 1.1));
+  return { lines: best, size, lh: size * 1.1, y0: noDate ? 0 : -R * 0.16, k: size / R };
+};
+/* 버튼(HTML)용: 글자 크기는 도장 크기(--sr)에 비례 */
+window.sealHtml = (name, date) => { const f = window.sealFit(name, 100, !date); const e = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  return `<span class="sname" style="font-size:calc(var(--sr,59px) * ${f.k.toFixed(3)})">${f.lines.map(e).join('<br>')}</span>${date ? `<br><small>${date}</small>` : ''}`; };
 /* 먹 도장 화면: 꾹 누르면 먹이 번지며 화면을 채우고, 손을 떼면 도장이 쾅 박힌다 */
 window.StampScreen = (function () {
 const T = { fill: 2000, hold: 100, slam: 220, clear: 900 }; // ms. 타이밍은 여기서 조절
@@ -22,9 +47,9 @@ const grain = (() => { const c = document.createElement('canvas'); c.width = c.h
 
 function open({ place, check, commit, onPhoto, onDone, onDogam, onCancel, toast, start }) {
   const el = document.createElement('section'); el.className = 'stampscr'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', `${place.name} 도장 찍기`);
-  const short = place.name.replace(/\s.*/, '').slice(0, 3);
+  const fit = window.sealFit(place.name, 86), gfit = window.sealFit(place.name, 75, true);
   el.innerHTML = `<canvas id="inkC"></canvas><button class="cancel" type="button" aria-label="닫기">×</button>
-    <div class="guide"><div class="ring">${short}</div><p>화면을 꾹 눌러 주세요</p><small>먹이 다 번지면 도장이 찍혀요</small></div>
+    <div class="guide"><div class="ring" style="font-size:${Math.min(26, Math.round(gfit.size))}px;line-height:1.12;text-align:center">${gfit.lines.map(l => l.replace(/[&<>]/g, '')).join('<br>')}</div><p>화면을 꾹 눌러 주세요</p><small>먹이 다 번지면 도장이 찍혀요</small></div>
     <div class="result"><h2 id="rTitle"></h2><p id="rSub"></p><div class="btns"><button class="btn pale" type="button" id="rDogam">다녀온 곳 보기</button><button class="btn ink" type="button" id="rPhoto">사진 남기기</button></div><p class="hint">사진은 나중에 올려도 돼요</p></div>`;
   document.getElementById('app').appendChild(el);
   const cv = el.querySelector('canvas'), ctx = cv.getContext('2d');
@@ -46,8 +71,8 @@ function open({ place, check, commit, onPhoto, onDone, onDogam, onCancel, toast,
     ctx.restore(); }
   function drawSeal(scale, alpha) { const cx = W / 2, cy = H / 2 - 20, R = 86; ctx.save(); ctx.translate(cx, cy); ctx.rotate(angle); ctx.scale(scale, scale); ctx.globalAlpha = alpha;
     ctx.beginPath(); for (let k = 0; k <= 96; k++) { const a = k / 96 * Math.PI * 2, w = 1 + (edgeNz(a) - .5) * 0.07; const x = Math.cos(a) * R * w, y = Math.sin(a) * R * w; k ? ctx.lineTo(x, y) : ctx.moveTo(x, y); } ctx.closePath(); ctx.lineWidth = 9; ctx.strokeStyle = '#C8372D'; ctx.stroke();
-    ctx.fillStyle = '#C8372D'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = `700 ${short.length >= 3 ? 44 : 56}px "Do Hyeon","Nanum Myeongjo",serif`; ctx.fillText(short, 0, -6);
-    ctx.font = '600 15px "IBM Plex Sans KR",sans-serif'; ctx.fillText(window.Store.kstToday().replaceAll('-', '.'), 0, 42);
+    ctx.fillStyle = '#C8372D'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = `700 ${Math.round(fit.size)}px "Do Hyeon","Nanum Myeongjo",serif`; fit.lines.forEach((l, i) => ctx.fillText(l, 0, fit.y0 + (i - (fit.lines.length - 1) / 2) * fit.lh));
+    ctx.font = '600 15px "IBM Plex Sans KR",sans-serif'; ctx.fillText(window.Store.kstToday().replaceAll('-', '.'), 0, 48);
     if (!reduce()) { ctx.globalCompositeOperation = 'destination-out'; for (let i = 0; i < 70; i++) { const a = Math.random() * Math.PI * 2, rr = R * (0.2 + Math.random() * 0.8); ctx.globalAlpha = Math.random() * 0.5; ctx.beginPath(); ctx.arc(Math.cos(a) * rr, Math.sin(a) * rr, Math.random() * 2.2, 0, Math.PI * 2); ctx.fill(); } ctx.globalCompositeOperation = 'source-over'; }
     ctx.restore(); }
   function frame(now) {

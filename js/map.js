@@ -169,7 +169,7 @@ function select(id) {
   const b = document.getElementById('stampBtn'), why = document.getElementById('sWhy'), go = document.getElementById('sGo');
   const near = cfg.testMode || today || d === null || d <= Math.max(p.r, 2000); // 2km 안이면 '찍으러 온 사람'
   sheet().classList.toggle('faraway', !near);
-  b.disabled = !ok && !s; b.classList.toggle('stamped', !!s); /* 찍은 곳은 도장을 누르면 기록·취소 창 */ b.querySelector('b').innerHTML = s ? `${p.name.replace(/\s.*/, '').slice(0, 3)}<br><small>${s.last.slice(5).replace('-', '.')}</small>` : '도장<br>꾹!';
+  b.disabled = !ok && !s; b.classList.toggle('stamped', !!s); /* 찍은 곳은 도장을 누르면 기록·취소 창 */ b.querySelector('b').innerHTML = s ? window.sealHtml(p.name, s.last.slice(5).replace('-', '.')) : '도장<br>꾹!';
       why.textContent = s ? (today ? '' : ok ? '오늘 또 찍을 수 있어요' : '') : cfg.testMode ? ''
     : d === null ? '내 위치를 켜면 반경 안에서 도장을 찍을 수 있어요.'
     : !S.accuracyOk && d <= p.r ? 'GPS 신호가 약해요. 하늘이 보이는 곳에서 잠시 기다려 주세요.'

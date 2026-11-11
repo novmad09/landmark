@@ -9,7 +9,7 @@ const FILTERS = [
 const noise = seed => { const g = Array.from({ length: 64 }, (_, i) => { const v = Math.sin(i * 127.1 + seed * 311.7) * 43758.5453; return v - Math.floor(v); }); return a => { const t = (a / (Math.PI * 2)) * 64, i = Math.floor(t) % 64, f = t - Math.floor(t), s = f * f * (3 - 2 * f); return g[i] * (1 - s) + g[(i + 1) % 64] * s; }; };
 
 /* 도장 스티커 그리기 (먹 도장 화면과 같은 모양) */
-function drawSeal(ctx, { x, y, R, short, date, angle, seed }) {
+function drawSeal(ctx, { x, y, R, name, date, angle, seed }) {
   const nz = noise(seed); ctx.save(); ctx.translate(x, y); ctx.rotate(angle);
   ctx.beginPath(); for (let k = 0; k <= 96; k++) { const a = k / 96 * Math.PI * 2, w = 1 + (nz(a) - .5) * 0.07; const px = Math.cos(a) * R * w, py = Math.sin(a) * R * w; k ? ctx.lineTo(px, py) : ctx.moveTo(px, py); } ctx.closePath();
   /* 사진 위에서도 또렷하게: 쨍한 빨강 + 흰 테두리, 얼룩 점 없음 */
@@ -17,8 +17,8 @@ function drawSeal(ctx, { x, y, R, short, date, angle, seed }) {
   ctx.lineWidth = R * 0.16; ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.stroke(); ctx.lineWidth = R * 0.1; ctx.strokeStyle = RED; ctx.stroke();
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   const txt = (t, font, y) => { ctx.font = font; ctx.lineWidth = R * 0.05; ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.strokeText(t, 0, y); ctx.fillStyle = RED; ctx.fillText(t, 0, y); };
-  txt(short, `700 ${Math.round(R * (short.length >= 3 ? 0.5 : 0.64))}px "Do Hyeon","Nanum Myeongjo",serif`, -R * 0.1);
-  txt(date, `700 ${Math.round(R * 0.19)}px "IBM Plex Sans KR",sans-serif`, R * 0.42);
+  const f = window.sealFit(name, R); f.lines.forEach((l, i) => txt(l, `700 ${Math.round(f.size)}px "Do Hyeon","Nanum Myeongjo",serif`, f.y0 + (i - (f.lines.length - 1) / 2) * f.lh));
+  txt(date, `700 ${Math.round(R * 0.18)}px "IBM Plex Sans KR",sans-serif`, R * 0.56);
   ctx.restore();
 }
 
@@ -49,11 +49,11 @@ function edit({ place, image, date, onDone, onCancel }) {
     <div class="row sizes"><span>도장 크기</span><button type="button" class="chip" id="peSm">작게</button><button type="button" class="chip" id="peLg">크게</button><button type="button" class="chip" id="peOff" aria-pressed="false">도장 빼기</button></div></div>`;
   document.getElementById('app').appendChild(el);
   const cv = el.querySelector('#peC'), ctx = cv.getContext('2d'); const W = image.width, H = image.height; cv.width = W; cv.height = H;
-  const short = place.name.replace(/\s.*/, '').slice(0, 3), seed = Math.random() * 1000, angle = (Math.random() * 16 - 8) * Math.PI / 180;
+  const seed = Math.random() * 1000, angle = (Math.random() * 16 - 8) * Math.PI / 180;
   const st = { filter: 'none', seal: true, R: Math.min(W, H) * 0.14, x: 0, y: 0 }; st.x = W - st.R * 1.35; st.y = H - st.R * 1.35;
   function render(final) {
     ctx.save(); ctx.clearRect(0, 0, W, H); const f = FILTERS.find(x => x.id === st.filter); ctx.filter = f.css; ctx.drawImage(image, 0, 0); ctx.filter = 'none'; ctx.restore();
-    if (st.seal) drawSeal(ctx, { x: st.x, y: st.y, R: st.R, short, date, angle, seed });
+    if (st.seal) drawSeal(ctx, { x: st.x, y: st.y, R: st.R, name: place.name, date, angle, seed });
     // 랜드마크 이름·날짜 워터마크
     ctx.save(); ctx.font = `600 ${Math.round(Math.min(W, H) * 0.032)}px "IBM Plex Sans KR",sans-serif`; ctx.textBaseline = 'bottom'; ctx.fillStyle = 'rgba(255,255,255,.9)'; ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 6; ctx.fillText(`${place.name} · ${date}`, Math.round(W * 0.03), H - Math.round(H * 0.025)); ctx.restore();
   }
