@@ -761,3 +761,13 @@ p.spot{margin:0 16px 2px}
 .grp-t b{min-width:0;overflow-wrap:anywhere}
 /* 이름이 긴 명소: 가로로 긴 도장 */
 .sealbtn.wide{width:calc(var(--sr) * 3.1);max-width:62vw}
+/* 도장 칸: 화면 폭을 넘지 않게. 폰에서는 2칸(정사각형 유지), 넓은 화면에서 3칸 */
+.grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+.cell{min-width:0;min-height:0;overflow:hidden}
+.cell .n{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;max-width:100%;overflow-wrap:anywhere}
+@media (max-width:480px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* 지도 시트의 도장은 언제나 가운데 */
+.sheet .sealrow,.sheet.faraway .sealrow{flex-direction:column;flex-wrap:nowrap;align-items:center;justify-content:center;text-align:center}
+.sheet .sealrow .go,.sheet.faraway .sealrow .go{flex:none;width:100%}
+/* 먹이 번지는 동안에도 가운데 명소 이름은 그대로 보인다 */
+.stampscr.inking .guide .ring{opacity:1;border-color:rgba(255,255,255,.55);color:#fff}

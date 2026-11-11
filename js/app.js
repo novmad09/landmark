@@ -131,25 +131,26 @@ async function stampInfo(p, after) {
 }
 /* 안드로이드 '뒤로' 버튼: 열린 화면(상세·사진·편집기·대화상자)을 하나씩 닫고, 다 닫히면 지도 탭으로, 지도에서 한 번 더 누르면 앱이 내려간다 */
 const Back = (() => {
-  /* 열린 화면이 하나라도 있거나 지도 탭이 아니면 기록에 '덫' 한 칸을 둔다. 뒤로를 누르면 덫이 빠지면서 맨 위 화면만 닫고, 아직 남았으면 다시 놓는다 */
+  /* 기록에 '덫' 한 칸을 만들어 늘 그 위에 머문다. 뒤로를 누르면 한 칸 밀려나는데, 맨 위 화면만 닫고 다시 덫으로 돌아온다(forward).
+     새 칸을 다시 만들지 않는 이유: 크롬은 손을 대지 않은 채 만든 칸을 뒤로 가기에서 건너뛰어 앱이 꺼진다 */
   const OV = '.login, .stampscr, .viewer, .pedit, .onb, .detail';
-  let trapped = false, ignore = 0, timer = null;
+  let onTrap = !!(history.state && history.state.trap), made = onTrap, ignore = 0;
   const openList = () => [...document.querySelectorAll(OV)].filter(e => e.id !== 'detail' || e.classList.contains('open'));
   const tab = () => { const c = document.querySelector('nav.tabs button[aria-current]'); return c ? c.dataset.tab : 'map'; };
-  let exitUntil = 0; const need = () => openList().length > 0 || document.getElementById('sheet').classList.contains('open') || tab() !== 'map' || Date.now() > exitUntil;
-  const sync = () => { clearTimeout(timer); timer = setTimeout(() => { const n = need(); if (n && !trapped) { trapped = true; history.pushState({ trap: 1 }, ''); } else if (!n && trapped) { trapped = false; ignore++; history.back(); } }, 0); };
   const closeTop = () => { const list = openList(); const top = list[list.length - 1]; if (!top) { const sh = document.getElementById('sheet'); if (sh.classList.contains('open')) { mapS.closeSheet(); return true; } return false; }
     if (top.id === 'detail') { closeDetail(); return true; }
     if (top.classList.contains('memprog')) return true; /* 사진 읽는 중에는 닫지 않는다 */
     if (top.classList.contains('onb')) { (top.querySelector('#onbBack') || top.querySelector('#onbSkip')).click(); return true; }
     const btn = top.querySelector('#askNo, #pkNo, #rpNo, #peX, .cancel, .x, .x2, .back'); if (btn) btn.click(); else top.remove(); return true; };
-  new MutationObserver(sync).observe(document.getElementById('app'), { childList: true });
-  ['detail', 'sheet'].forEach(id => new MutationObserver(sync).observe(document.getElementById(id), { attributes: true, attributeFilter: ['class'] }));
-  new MutationObserver(sync).observe(document.querySelector('nav.tabs'), { attributes: true, subtree: true, attributeFilter: ['aria-current'] });
-  /* 맨 바깥(지도)에서 뒤로: 바로 닫지 않고 한 번 더 누르면 닫힌다 */
-  window.addEventListener('popstate', () => { if (ignore > 0) { ignore--; return; } trapped = false; if (closeTop()) return sync(); if (tab() !== 'map') { showTab('map'); return sync(); }
-    exitUntil = Date.now() + 2200; toast('한 번 더 누르면 앱이 닫혀요'); setTimeout(sync, 2300); });
-  sync(); return { sync };
+  const arm = () => { if (onTrap) return; if (!made) { made = true; history.pushState({ trap: 1 }, ''); } else { ignore++; history.forward(); } onTrap = true; };
+  /* 처음 화면을 만질 때 덫을 놓는다 (만진 뒤에 만든 칸이어야 뒤로 가기가 건너뛰지 않는다) */
+  ['pointerdown', 'keydown', 'touchstart'].forEach(ev => addEventListener(ev, () => { if (!made || (!onTrap && Date.now() > exitUntil)) arm(); }, { capture: true, passive: true }));
+  let exitUntil = 0;
+  window.addEventListener('popstate', () => { if (ignore > 0) { ignore--; return; } onTrap = false;
+    if (closeTop()) return arm(); if (tab() !== 'map') { showTab('map'); return arm(); }
+    /* 맨 바깥(지도)에서 뒤로: 바로 닫지 않고 한 번 더 누르면 닫힌다 */
+    exitUntil = Date.now() + 2200; toast('한 번 더 누르면 앱이 닫혀요'); setTimeout(() => { if (!onTrap) arm(); }, 2300); });
+  return {};
 })();
 /* 탭은 주소(#)에 적지 않는다: 뒤로 가기 기록과 엇갈리지 않게 */
 
@@ -178,14 +179,13 @@ function requireLogin() {
 async function startStamp(place, pos, start) {
   const noDialog = !!store.getUser() || (store.mode === 'local' && !!LS.get('lm-agreed', null)); /* 이름이 자동으로 정해지면 누르던 손가락 그대로 이어서 찍는다 */
   if (!(await requireLogin())) return;
-  mapS.closeSheet();
   window.StampScreen.open({ place, toast, start: noDialog ? start : null,
     check: () => store.check(place.id, pos),
     commit: () => store.stamp(place.id, pos),
-    onDone: () => { mapS.refresh(); Nudge.promote(); scheduleEvening(); const st = mapS.regionStats(true)[place.rg]; if (st && st.total > 1 && st.done === st.total) setTimeout(() => toast(`${place.rgName} 전부 모았어요! 지도에 색이 칠해졌어요`), 600); },
+    onDone: () => { mapS.closeSheet(); mapS.refresh(); /* 찍힌 뒤에만 시트를 닫는다. 중간에 떼면 보던 화면 그대로 */ Nudge.promote(); scheduleEvening(); const st = mapS.regionStats(true)[place.rg]; if (st && st.total > 1 && st.done === st.total) setTimeout(() => toast(`${place.rgName} 전부 모았어요! 지도에 색이 칠해졌어요`), 600); },
     onDogam: async () => { showTab('dogam'); openDetail(place.id); await awardBadges(); await askNotify(); },
     onPhoto: () => { openDetail(place.id); setTimeout(pickPhoto, 150, place.id); },
-    onCancel: async () => { mapS.refresh(); await awardBadges(); await askNotify(); },
+    onCancel: async early => { if (early) return; /* 누르다 뗀 것: 보던 화면 그대로 */ mapS.refresh(); await awardBadges(); await askNotify(); },
   });
 }
 
@@ -684,7 +684,7 @@ function openDetail(id) {
   el.querySelector('#dPhoto').onclick = () => s ? pickPhoto(id) : toast('도장을 찍은 곳에만 사진을 올릴 수 있어요');
   el.querySelector('#dAdd').onclick = () => addToTrip(p);
   bindMem(el, p, () => openDetail(id));
-  const ds = el.querySelector('#dStamp'); ds.oncontextmenu = e => e.preventDefault(); ds.onpointerdown = e => { if (ds.disabled) return; if (s) { e.preventDefault(); stampInfo(p, () => openDetail(id)); return; } const ps = mapS.pos() || (cfg.testMode ? { lat: p.lat, lng: p.lng, accuracy: 5 } : null); if (!ps) return; e.preventDefault(); startStamp(p, ps, { x: e.clientX, y: e.clientY, pointerId: e.pointerId }); };
+  const ds = el.querySelector('#dStamp'); ds.oncontextmenu = e => e.preventDefault(); ds.onpointerdown = e => { if (ds.disabled) return; if (s) { e.preventDefault(); stampInfo(p, () => openDetail(id)); return; } const ps = mapS.pos() || (cfg.testMode ? { lat: p.lat, lng: p.lng, accuracy: 5 } : null); if (!ps) return; e.preventDefault(); startStamp(p, ps, (r => ({ x: r.left + r.width / 2, y: r.top + r.height / 2, pointerId: e.pointerId }))(e.currentTarget.getBoundingClientRect()) /* 먹은 누른 도장에서부터 번진다 */); };
   el.querySelectorAll('[data-ph]').forEach(b => b.onclick = () => { const idx = sorted.findIndex(x => x.id === b.dataset.ph); openGallery(id, idx + (md && md.img && !cover ? 1 : 0), sorted); });
   el.querySelectorAll('[data-sort]').forEach(b => b.onclick = () => { photoSort = b.dataset.sort; openDetail(id); });
 }

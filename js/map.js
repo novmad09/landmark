@@ -24,16 +24,16 @@ function mapStyle() {
     { id, type: 'line', source: 'omt', 'source-layer': 'transportation', minzoom: min, filter: ['match', ['get', 'class'], classes, true, false], layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': color, 'line-width': [...ZI, ...stops.flatMap(([z, w]) => [z, w])] } }];
   return { version: 8, sources: { omt: { type: 'vector', url: cfg.tiles } }, layers: [
     { id: 'land', type: 'background', paint: { 'background-color': p('--land') } },
-    { id: 'landcover', type: 'fill', source: 'omt', 'source-layer': 'landcover', filter: ['match', ['get', 'class'], ['wood', 'grass', 'farmland'], true, false], paint: { 'fill-color': ['match', ['get', 'class'], 'wood', p('--green-deep'), p('--green')], 'fill-opacity': ['match', ['get', 'class'], 'farmland', 0.45, 0.9] } },
-    { id: 'park', type: 'fill', source: 'omt', 'source-layer': 'park', paint: { 'fill-color': p('--green') } },
+    { id: 'landcover', type: 'fill', minzoom: 11.2, source: 'omt', 'source-layer': 'landcover', filter: ['match', ['get', 'class'], ['wood', 'grass', 'farmland'], true, false], paint: { 'fill-color': ['match', ['get', 'class'], 'wood', p('--green-deep'), p('--green')], 'fill-opacity': ['match', ['get', 'class'], 'farmland', 0.45, 0.9] } },
+    { id: 'park', type: 'fill', minzoom: 11.2, source: 'omt', 'source-layer': 'park', paint: { 'fill-color': p('--green') } },
     { id: 'water', type: 'fill', source: 'omt', 'source-layer': 'water', paint: { 'fill-color': p('--sea') } },
-    { id: 'waterway', type: 'line', source: 'omt', 'source-layer': 'waterway', paint: { 'line-color': p('--river'), 'line-width': [...ZI, 8, 0.6, 13, 2, 16, 6] } },
+    { id: 'waterway', type: 'line', minzoom: 11.2, source: 'omt', 'source-layer': 'waterway', paint: { 'line-color': p('--river'), 'line-width': [...ZI, 8, 0.6, 13, 2, 16, 6] } },
     { id: 'building', type: 'fill', source: 'omt', 'source-layer': 'building', minzoom: 13, paint: { 'fill-color': p('--block') } },
     ...road('minor', ['minor', 'service', 'track'], [[12, 0.4], [14, 2], [16, 6], [18, 14]], p('--road'), p('--road-edge'), 12),
-    ...road('mid', ['secondary', 'tertiary'], [[8, 0.5], [11, 1.2], [14, 4], [16, 9], [18, 18]], p('--road'), p('--road-edge'), 8),
-    ...road('major', ['motorway', 'trunk', 'primary'], [[5, 0.5], [9, 1.4], [12, 3], [14, 6], [16, 12], [18, 24]], p('--road-major'), p('--road-major-edge'), 5),
-    { id: 'region-part', type: 'fill', source: 'regions', filter: ['in', ['get', 'code'], ['literal', []]], paint: { 'fill-color': p('--brand'), 'fill-opacity': 0.10 } },
-    { id: 'region-done', type: 'fill', source: 'regions', filter: ['in', ['get', 'code'], ['literal', []]], paint: { 'fill-color': p('--brand'), 'fill-opacity': 0.28 } },
+    ...road('mid', ['secondary', 'tertiary'], [[8, 0.5], [11, 1.2], [14, 4], [16, 9], [18, 18]], p('--road'), p('--road-edge'), 11.2), /* 시·도·전국 화면에서는 길·산을 그리지 않는다: 색칠만 보이게 */
+    ...road('major', ['motorway', 'trunk', 'primary'], [[5, 0.5], [9, 1.4], [12, 3], [14, 6], [16, 12], [18, 24]], p('--road-major'), p('--road-major-edge'), 11.2),
+    { id: 'region-part', type: 'fill', source: 'regions', filter: ['in', ['get', 'code'], ['literal', []]], paint: { 'fill-color': p('--brand'), 'fill-opacity': ['interpolate', ['linear'], ['zoom'], 10.8, 0.30, 11.6, 0.10] } }, /* 시·도 단위부터는 더 진하게 */
+    { id: 'region-done', type: 'fill', source: 'regions', filter: ['in', ['get', 'code'], ['literal', []]], paint: { 'fill-color': p('--brand'), 'fill-opacity': ['interpolate', ['linear'], ['zoom'], 10.8, 0.62, 11.6, 0.28] } },
     { id: 'region-done-line', type: 'line', source: 'regions', filter: ['in', ['get', 'code'], ['literal', []]], paint: { 'line-color': p('--brand'), 'line-width': 2 } },
     { id: 'guide-line', type: 'line', source: 'guide', layout: { 'line-cap': 'round' }, paint: { 'line-color': ['get', 'c'], 'line-width': 3, 'line-dasharray': [2, 2] } },
     { id: 'radius-fill', type: 'fill', source: 'radius', paint: { 'fill-color': ['get', 'c'], 'fill-opacity': 0.14 } },
@@ -66,7 +66,7 @@ const nearSeen = {};
 function nearCheck() { if (!S.me || !onNear) return; const now = Date.now(); const today = window.Store.kstToday();
   const hit = L.filter(p => dist(S.me, p) <= p.r && !(store.stampsOf(p.id)?.last === today) && !(nearSeen[p.id] && now - nearSeen[p.id] < 30 * 60e3)).sort((a, b) => dist(S.me, a) - dist(S.me, b))[0];
   if (hit) { nearSeen[hit.id] = now; onNear(hit); } }
-const mode = () => { if (S.trip) return 'near'; const z = map.getZoom(); return z < 7.6 ? 'nat' : z < 11.2 ? 'city' : 'near'; };
+const mode = () => { if (S.trip || S.filter.seen === 'yes') return 'near'; /* 다녀온 곳만 볼 땐 지역 묶음(서울·경기…) 없이 핀을 바로 보여 준다 */ const z = map.getZoom(); return z < 7.6 ? 'nat' : z < 11.2 ? 'city' : 'near'; };
 const P = (lng, lat) => { const p = map.project([lng, lat]); return [p.x, p.y]; };
 const visited = id => !!store.stampsOf(id);
 const remembered = id => !!(window.Memory && window.Memory.of(id)); /* 사진으로 찾은 추억 도장 */
@@ -220,7 +220,7 @@ function openFilter() {
       <div class="frow"><span>모음</span>${chip('set', '', '전체')}${window.SETS.map(s => chip('set', s.id, s.name)).join('')}</div>
       <div class="frow"><span>종류</span>${chip('cat', '', '전체')}${Object.entries(CATS).map(([k, c]) => chip('cat', k, c.emoji + ' ' + c.name)).join('')}</div>
       <div class="frow"><span>지역</span><div class="sel2"><select id="fSido"><option value="">전국</option>${sidos.map(s => `<option value="${s}" ${f.sido === s ? 'selected' : ''}>${s}</option>`).join('')}</select><select id="fGu" ${gus.length ? '' : 'disabled'}><option value="">${f.sido ? f.sido + ' 전체' : '시·군·구'}</option>${gus.map(g => `<option value="${g}" ${f.gu === g ? 'selected' : ''}>${g}</option>`).join('')}</select></div></div>
-      <div class="frow"><span>방문</span>${chip('seen', '', '전체')}${chip('seen', 'yes', '다녀온 곳')}${chip('seen', 'stamp', '🔴 현장 도장')}${chip('seen', 'mem', '🌸 추억만')}${chip('seen', 'no', '아직 안 간 곳')}</div>
+      <div class="frow"><span>방문</span>${chip('seen', '', '전체')}${chip('seen', 'yes', '다녀온 곳')}${chip('seen', 'no', '아직 안 간 곳')}</div>
       <p class="cnt">${pool0().length}곳이 지도에 보여요</p>
       <div class="askrow"><button class="btn ghost" type="button" id="fRst">전체 보기</button><button class="btn primary" type="button" id="fOk">닫기</button></div></div>`;
     el.querySelectorAll('.chip').forEach(b => b.onclick = () => { const k = b.dataset.k; f[k] = f[k] === b.dataset.v ? '' : b.dataset.v; if (k === 'sido') f.gu = ''; apply(); render(); });
@@ -287,7 +287,7 @@ function init(opts) {
   document.getElementById('closeSheet').onclick = closeSheet;
   // 도장 자체를 꾹 누르면 그 자리에서 바로 먹이 번지기 시작한다 (손을 뗄 필요 없음)
   document.getElementById('stampBtn').oncontextmenu = e => e.preventDefault();
-  document.getElementById('stampBtn').onpointerdown = e => { const p = byId(S.sel); if (!p || e.currentTarget.disabled) return; if (e.currentTarget.classList.contains('stamped') && !(cfg.testMode || (S.me && inRange(p) && S.accuracyOk && store.stampsOf(p.id)?.last !== window.Store.kstToday()))) { e.preventDefault(); onStampInfo && onStampInfo(p); return; } const pos = S.me || (cfg.testMode ? { lat: p.lat, lng: p.lng, accuracy: 5 } : null); if (!pos) return; e.preventDefault(); onStamp(p, pos, { x: e.clientX, y: e.clientY, pointerId: e.pointerId }); };
+  document.getElementById('stampBtn').onpointerdown = e => { const p = byId(S.sel); if (!p || e.currentTarget.disabled) return; if (e.currentTarget.classList.contains('stamped') && !(cfg.testMode || (S.me && inRange(p) && S.accuracyOk && store.stampsOf(p.id)?.last !== window.Store.kstToday()))) { e.preventDefault(); onStampInfo && onStampInfo(p); return; } const pos = S.me || (cfg.testMode ? { lat: p.lat, lng: p.lng, accuracy: 5 } : null); if (!pos) return; e.preventDefault(); onStamp(p, pos, (r => ({ x: r.left + r.width / 2, y: r.top + r.height / 2, pointerId: e.pointerId }))(e.currentTarget.getBoundingClientRect()) /* 먹은 누른 도장에서부터 번진다 */); };
   document.getElementById('jNear').onclick = () => S.me ? map.flyTo({ center: [S.me.lng, S.me.lat], zoom: 14 }) : startGPS();
   document.getElementById('jCity').onclick = () => { const base = S.me || { lat: map.getCenter().lat, lng: map.getCenter().lng }; const p = L.map(p => ({ p, d: dist(base, p) })).sort((a, b) => a.d - b.d)[0].p; const ms = L.filter(q => q.sido === p.sido); const b = new maplibregl.LngLatBounds(); ms.forEach(q => b.extend([q.lng, q.lat])); const c = window.SIDO_CENTER[p.sido]; if (c) b.extend(c); map.fitBounds(b, { padding: 70, maxZoom: 10.5, duration: 800 }); };
   document.getElementById('jNat').onclick = () => map.fitBounds([[125.0, 33.1], [130.95, 38.65]], { padding: 30, duration: 900 });

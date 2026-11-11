@@ -60,7 +60,7 @@ function open({ place, check, commit, onPhoto, onDone, onDogam, onCancel, toast,
   let W, H, DPR; const resize = () => { const r = el.getBoundingClientRect(); DPR = Math.min(devicePixelRatio || 1, 2.5); W = r.width; H = r.height; cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR); }; resize(); addEventListener('resize', resize);
   const paper = getComputedStyle(el).getPropertyValue('--paper').trim() || '#F5EFE3', ink = getComputedStyle(el).getPropertyValue('--ink-stamp').trim() || '#1C1A17';
   const seed = Math.random() * 1000, nz = noise2(seed), angle = (Math.random() * 16 - 8) * Math.PI / 180, edgeNz = noise2(seed + 7);
-  const maxR = Math.hypot(W, H) * 0.62;
+  let maxR = Math.hypot(W, H) * 0.62;
   let state = 'idle', t0 = 0, press = null, raf = null, fill = 0, checked = null, result = null, holdDone = false, lastVib = 0, autoT = null, committed = false;
 
   function paperBg() { ctx.fillStyle = paper; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 0.9; ctx.fillStyle = ctx.createPattern(grain, 'repeat'); ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
@@ -87,7 +87,7 @@ function open({ place, check, commit, onPhoto, onDone, onDogam, onCancel, toast,
     if (state === 'filling') { fill = Math.min(1, (now - t0) / T.fill); drawInk(fill); el.classList.toggle('inking', fill > 0.3);
       if (fill >= 1 && !holdDone) { holdDone = true; vib(0); vib(120); el.querySelector('.guide p').textContent = '손을 떼세요!';
         autoT = setTimeout(() => { if (state === 'filling') up({ preventDefault() {} }); }, 700); } // 계속 누르고 있어도 저절로 찍힌다
-    } else if (state === 'releasing') { const k = Math.min(1, (now - t0) / T.clear); drawInk(1 - k); if (k >= 1) { state = 'idle'; fill = 0; holdDone = false; }
+    } else if (state === 'releasing') { const k = Math.min(1, (now - t0) / T.clear); drawInk(1 - k); if (k >= 1) { close(); toast && toast('끝까지 꾹 눌러야 도장이 찍혀요'); onCancel && onCancel(true); return; } /* 중간에 떼면 원래 화면으로 돌아간다 */
     } else if (state === 'slam') { drawInk(1, true); const k = Math.min(1, (now - t0) / T.slam), e = Math.pow(k, 3); drawSeal(2.5 - 1.5 * e, Math.min(1, k * 1.6)); if (k >= 1) { state = 'clearing'; t0 = now; el.classList.add('shake'); vib(90); setTimeout(() => el.classList.remove('shake'), 260); }
     } else if (state === 'clearing') { const k = Math.min(1, (now - t0) / T.clear); const r = maxR * (1 - k * k); if (r > 0) { ctx.save(); ctx.beginPath(); for (let j = 0; j <= 72; j++) { const a = j / 72 * Math.PI * 2, w = 1 + (nz(a) - .5) * 0.5; const x = press.x + Math.cos(a) * r * w, y = press.y + Math.sin(a) * r * w; j ? ctx.lineTo(x, y) : ctx.moveTo(x, y); } ctx.closePath(); ctx.clip(); ctx.globalAlpha = 0.92 * (1 - k * 0.3); ctx.fillStyle = ink; ctx.fillRect(0, 0, W, H); ctx.restore(); }
       drawSeal(1, 1); if (k >= 1 && committed) { state = 'done'; finish(); } // 저장이 끝나야 결과를 보여 준다
@@ -98,13 +98,14 @@ function open({ place, check, commit, onPhoto, onDone, onDogam, onCancel, toast,
   function finish() { Snd.chime(); el.classList.add('done'); const v = result?.visitNo || 1; el.querySelector('#rTitle').textContent = `${place.name}`; el.querySelector('#rSub').textContent = `${window.Store.kstToday().replaceAll('-', '.')} · 방문 ${v}회${v > 1 ? ' · 다시 와 주셨네요' : (() => { const m = window.Memory && window.Memory.of(place.id); if (!m) return ' · 첫 도장이에요'; const y = Math.floor((Date.parse(window.Store.kstToday()) - Date.parse(m.last)) / 31557600000); return y >= 1 ? ` · ${y}년 만에 다시 왔어요` : ' · 추억의 그곳에 다시 왔어요'; })()}`; onDone && onDone(result); }
 
   let pid = null, closed = false; /* 누르기 시작한 손가락만 본다. 다른 손가락이 닿았다 떼도 무시 */
-  function begin(cx, cy, id) { pid = id ?? null; clearTimeout(autoT); committed = false; result = null; el.classList.remove('again'); el.querySelector('.guide p').textContent = '꾸우욱 누르고 계세요'; press = { x: W / 2, y: H / 2 - 20 }; /* 어디를 눌러도 먹은 화면 가운데서 번진다 */ state = 'filling'; t0 = performance.now(); lastVib = 0; Snd.brush(); if (!reduce()) vib(holdPattern());
+  function begin(cx, cy, id) { pid = id ?? null; clearTimeout(autoT); committed = false; result = null; el.classList.remove('again'); el.querySelector('.guide p').textContent = '꾸우욱 누르고 계세요'; { const er = el.getBoundingClientRect(); press = cx != null ? { x: cx - er.left, y: cy - er.top } : { x: W / 2, y: H / 2 - 20 }; /* 누른 자리(도장 버튼)에서부터 번진다 */
+      maxR = Math.max(...[[0, 0], [W, 0], [0, H], [W, H]].map(([x, y]) => Math.hypot(x - press.x, y - press.y))) * 1.08; } state = 'filling'; t0 = performance.now(); lastVib = 0; Snd.brush(); if (!reduce()) vib(holdPattern());
     checked = check ? check() : { ok: true }; // 찍을 수 있는지만 본다. 기록은 손을 뗄 때
     if (!raf) raf = requestAnimationFrame(frame); }
   function down(e) { if (!['idle', 'releasing', 'fail'].includes(state) || el.classList.contains('done')) return; if (e.target.closest('.cancel')) return; e.preventDefault(); fill = 0; holdDone = false; begin(e.clientX, e.clientY, e.pointerId); } /* 중간에 뗐다가 바로 다시 눌러도 받는다 */
   async function up(e) { if (state !== 'filling') return; if (pid !== null && e.pointerId !== undefined && e.pointerId !== pid) return; clearTimeout(autoT); e.preventDefault();
     if (fill < 1) { state = 'releasing'; t0 = performance.now(); vib(0); vib(15); el.classList.remove('inking'); // 중간에 떼면 아무것도 기록하지 않는다
-      el.querySelector('.guide p').textContent = '조금만 더 꾹 눌러 주세요'; el.classList.add('again'); return; }
+      el.querySelector('.guide p').textContent = ''; return; }
     if (checked && !checked.ok) { state = 'fail'; t0 = performance.now(); vib([30, 40, 30]); el.classList.remove('inking'); toast && toast(checked.reason); return; }
     state = 'slam'; t0 = performance.now(); Snd.thud(); /* 여기서 처음으로 기록한다 */
     let r; try { r = await commit(); } catch (e2) { r = { ok: false, reason: '저장 중 문제가 생겼어요' }; }
