@@ -280,7 +280,11 @@ function init(opts) {
   map.on('move', dirty); map.on('resize', dirty); map.on('load', () => { paintRegions(); dirty(); }); map.on('style.load', () => { tokCache = {}; geoSig = ''; setTimeout(() => { paintRegions(); drawGeo(); memLayerVis(); }, 0); }); /* 테마가 바뀌면 선·반경도 다시 */
   let regionsPainted = false; map.on('sourcedata', e => { if (e.sourceId === 'regions' && !regionsPainted && map.getLayer('region-done')) { regionsPainted = true; paintRegions(); } });
   map.on('dragstart', () => movedFlag = true); map.on('zoomstart', () => movedFlag = true); map.on('moveend', () => setTimeout(() => movedFlag = false, 0));
-  map.on('click', e => { const f = map.queryRenderedFeatures(e.point, { layers: ['mem-dot'] })[0]; if (f) { openMem(f); return; } if (S.sel) closeSheet(); });
+  map.on('click', e => { /* 핀·지역 묶음은 터치를 받지 않으므로, 톡 누른 자리에 있는 것을 여기서 찾아 연다 */
+    const oe = e.originalEvent, cx = oe.clientX, cy = oe.clientY; let hit = null, hd = Infinity;
+    for (const el of pool.values()) { const r = el.getBoundingClientRect(); if (cx < r.left - 4 || cx > r.right + 4 || cy < r.top - 4 || cy > r.bottom + 4) continue; const d = Math.hypot(cx - (r.left + r.width / 2), cy - (r.top + r.height / 2)); if (d < hd) { hd = d; hit = el; } }
+    if (hit) { movedFlag = false; onTap({ currentTarget: hit }); return; }
+    const f = map.queryRenderedFeatures(e.point, { layers: ['mem-dot'] })[0]; if (f) { openMem(f); return; } if (S.sel) closeSheet(); });
   map.on('mouseenter', 'mem-dot', () => { map.getCanvas().style.cursor = 'pointer'; }); map.on('mouseleave', 'mem-dot', () => { map.getCanvas().style.cursor = ''; });
   const mq = matchMedia('(prefers-color-scheme: dark)'); mq.addEventListener('change', () => map.setStyle(styleWithSources()));
   new MutationObserver(() => map.setStyle(styleWithSources())).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
