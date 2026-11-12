@@ -779,3 +779,11 @@ p.spot{margin:0 16px 2px}
 .overlay>.lm,.overlay>.cl{pointer-events:none}
 /* 도장 화면 가운데 점선 원은 없앤다 */
 .stampscr .guide .ring{display:none}
+
+/* 도장 화면 안내는 아래쪽 알림 모양 한 줄로 (누르는 동안 '꾸우욱 누르고 계세요.') */
+.stampscr .guide{position:absolute;left:0;right:0;bottom:90px;gap:0}
+.stampscr .guide p,.stampscr.onmap .guide p,.stampscr.again .guide p{background:#fff;color:#1b1f2a;text-shadow:none;font-size:16px;font-weight:600;line-height:1.4;padding:13px 18px;border-radius:16px;box-shadow:0 4px 16px rgba(0,0,0,.28);max-width:88%;animation:none}
+.stampscr .guide p:empty{display:none}
+/* 도장 칸: 여백을 거의 없애고 내용을 키운다 */
+@media (max-width:480px){.grid{gap:6px}.cell{padding:4px 3px;gap:2px;border-radius:12px}.cell .st{width:38px;height:38px}.cell .st svg{width:22px;height:22px}}
+@media (max-width:372px){.cell .st{width:30px;height:30px}.cell .st svg{width:17px;height:17px}}

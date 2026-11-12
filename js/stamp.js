@@ -53,7 +53,7 @@ function open({ place, check, commit, onPhoto, onDone, onDogam, onCancel, toast,
   const SR = place.name.replace(/\s/g, '').length > 6 ? 96 : 86; /* 긴 이름은 찍히는 도장을 키운다 */
   const fit = window.sealFit(place.name, SR), gfit = window.sealFit(place.name, 75, true, true);
   el.innerHTML = `<canvas id="inkC"></canvas><button class="cancel" type="button" aria-label="닫기">×</button>
-    <div class="guide"><div class="ring" style="font-size:${Math.min(26, Math.round(gfit.size))}px;line-height:1.12;text-align:center">${gfit.lines.map(l => l.replace(/[&<>]/g, '')).join('<br>')}</div><p>화면을 꾹 눌러 주세요</p><small>먹이 다 번지면 도장이 찍혀요</small></div>
+    <div class="guide"><div class="ring" style="font-size:${Math.min(26, Math.round(gfit.size))}px;line-height:1.12;text-align:center">${gfit.lines.map(l => l.replace(/[&<>]/g, '')).join('<br>')}</div><p>화면을 꾹 눌러 주세요</p></div>
     <div class="result"><h2 id="rTitle"></h2><p id="rSub"></p><div class="btns"><button class="btn pale" type="button" id="rDogam">다녀온 곳 보기</button><button class="btn ink" type="button" id="rPhoto">사진 남기기</button></div><p class="hint">사진은 나중에 올려도 돼요</p></div>`;
   document.getElementById('app').appendChild(el);
   const cv = el.querySelector('canvas'), ctx = cv.getContext('2d');
@@ -87,7 +87,7 @@ function open({ place, check, commit, onPhoto, onDone, onDogam, onCancel, toast,
     if (state === 'filling') { fill = Math.min(1, (now - t0) / T.fill); drawInk(fill); el.classList.toggle('inking', fill > 0.3);
       if (fill >= 1 && !holdDone) { holdDone = true; vib(0); vib(120); el.querySelector('.guide p').textContent = '손을 떼세요!';
         autoT = setTimeout(() => { if (state === 'filling') up({ preventDefault() {} }); }, 700); } // 계속 누르고 있어도 저절로 찍힌다
-    } else if (state === 'releasing') { const k = Math.min(1, (now - t0) / T.clear); drawInk(1 - k); if (k >= 1) { close(); toast && toast('끝까지 꾹 눌러야 도장이 찍혀요'); onCancel && onCancel(true); return; } /* 중간에 떼면 원래 화면으로 돌아간다 */
+    } else if (state === 'releasing') { const k = Math.min(1, (now - t0) / T.clear); drawInk(1 - k); if (k >= 1) { close(); onCancel && onCancel(true); return; } /* 중간에 떼면 원래 화면으로 돌아간다 */
     } else if (state === 'slam') { drawInk(1, true); const k = Math.min(1, (now - t0) / T.slam), e = Math.pow(k, 3); drawSeal(2.5 - 1.5 * e, Math.min(1, k * 1.6)); if (k >= 1) { state = 'clearing'; t0 = now; el.classList.add('shake'); vib(90); setTimeout(() => el.classList.remove('shake'), 260); }
     } else if (state === 'clearing') { const k = Math.min(1, (now - t0) / T.clear); const r = maxR * (1 - k * k); if (r > 0) { ctx.save(); ctx.beginPath(); for (let j = 0; j <= 72; j++) { const a = j / 72 * Math.PI * 2, w = 1 + (nz(a) - .5) * 0.5; const x = press.x + Math.cos(a) * r * w, y = press.y + Math.sin(a) * r * w; j ? ctx.lineTo(x, y) : ctx.moveTo(x, y); } ctx.closePath(); ctx.clip(); ctx.globalAlpha = 0.92 * (1 - k * 0.3); ctx.fillStyle = ink; ctx.fillRect(0, 0, W, H); ctx.restore(); }
       drawSeal(1, 1); if (k >= 1 && committed) { state = 'done'; finish(); } // 저장이 끝나야 결과를 보여 준다
@@ -98,7 +98,7 @@ function open({ place, check, commit, onPhoto, onDone, onDogam, onCancel, toast,
   function finish() { Snd.chime(); el.classList.add('done'); const v = result?.visitNo || 1; el.querySelector('#rTitle').textContent = `${place.name}`; el.querySelector('#rSub').textContent = `${window.Store.kstToday().replaceAll('-', '.')} · 방문 ${v}회${v > 1 ? ' · 다시 와 주셨네요' : (() => { const m = window.Memory && window.Memory.of(place.id); if (!m) return ' · 첫 도장이에요'; const y = Math.floor((Date.parse(window.Store.kstToday()) - Date.parse(m.last)) / 31557600000); return y >= 1 ? ` · ${y}년 만에 다시 왔어요` : ' · 추억의 그곳에 다시 왔어요'; })()}`; onDone && onDone(result); }
 
   let pid = null, closed = false; /* 누르기 시작한 손가락만 본다. 다른 손가락이 닿았다 떼도 무시 */
-  function begin(cx, cy, id) { pid = id ?? null; clearTimeout(autoT); committed = false; result = null; el.classList.remove('again'); el.querySelector('.guide p').textContent = '꾸우욱 누르고 계세요'; { const er = el.getBoundingClientRect(); press = cx != null ? { x: cx - er.left, y: cy - er.top } : { x: W / 2, y: H / 2 - 20 }; /* 누른 자리(도장 버튼)에서부터 번진다 */
+  function begin(cx, cy, id) { pid = id ?? null; clearTimeout(autoT); committed = false; result = null; el.classList.remove('again'); el.querySelector('.guide p').textContent = '꾸우욱 누르고 계세요.'; { const er = el.getBoundingClientRect(); press = cx != null ? { x: cx - er.left, y: cy - er.top } : { x: W / 2, y: H / 2 - 20 }; /* 누른 자리(도장 버튼)에서부터 번진다 */
       maxR = Math.max(...[[0, 0], [W, 0], [0, H], [W, H]].map(([x, y]) => Math.hypot(x - press.x, y - press.y))) * 1.08; } state = 'filling'; t0 = performance.now(); lastVib = 0; Snd.brush(); if (!reduce()) vib(holdPattern());
     checked = check ? check() : { ok: true }; // 찍을 수 있는지만 본다. 기록은 손을 뗄 때
     if (!raf) raf = requestAnimationFrame(frame); }
@@ -120,7 +120,7 @@ function open({ place, check, commit, onPhoto, onDone, onDogam, onCancel, toast,
   el.querySelector('#rPhoto').onclick = () => { close(); onPhoto && onPhoto(result); };
   function close() { closed = true; vib(0); clearTimeout(autoT); cancelAnimationFrame(raf); removeEventListener('resize', resize); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up); el.remove(); }
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0); el.classList.add('onmap');
-  if (start) { begin(start.x, start.y, start.pointerId); el.querySelector('.guide p').textContent = '꾸우욱 누르고 계세요'; }
+  if (start) { begin(start.x, start.y, start.pointerId); }
   return { close };
 }
 return { open, T };
