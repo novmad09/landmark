@@ -9,7 +9,7 @@ const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').
 /* ctx: { store, Trips, TripPhotos, byId, L, toast, ask, matchQ, shrink, hoursLabel, dist, openPhotos(items, i), onSaved(t), onPublish(t, draft) } */
 function open(t, ctx, opts) {
   opts = opts || {}; const { store, Trips, TripPhotos, byId, L, toast, ask, matchQ, shrink, hoursLabel, dist } = ctx;
-  const stamps = store.allStamps(); const user = store.getUser() || { id: 'local', nickname: '여행자' };
+  const stamps = ctx.seen ? ctx.seen() : store.allStamps(); const user = store.getUser() || { id: 'local', nickname: '여행자' };
   const guess = (a, b) => dist(a, b) < 1500 ? '도보' : '대중교통';
   // 작업 사본
   const d = { name: t.name, order: t.ids.filter(byId), notes: { ...(t.notes || {}) }, stay: { ...(t.stay || {}) }, photos: JSON.parse(JSON.stringify(t.photos || {})), legs: JSON.parse(JSON.stringify(t.legs || {})), tip: t.tip || '', hours: snapHours(t.hours || 8) };

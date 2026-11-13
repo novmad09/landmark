@@ -268,7 +268,7 @@ window.LANDMARKS = [
  {id:'L038',name:'헤이리예술마을',lat:37.7930,lng:126.6960,sido:'경기',gu:'파주시',cat:'street',r:300,v:0,sets:['local'],desc:'건축가들이 지은 갤러리·카페 마을.',pop:76},
  {id:'L039',name:'마장호수 출렁다리',lat:37.7800,lng:126.8630,sido:'경기',gu:'파주시',cat:'park',r:300,v:0,sets:['local'],desc:'220m 흔들다리와 호수 둘레길.',pop:66},
  {id:'L040',name:'애기봉평화생태공원',lat:37.7290,lng:126.5540,sido:'경기',gu:'김포시',cat:'park',r:300,v:0,sets:['local'],desc:'한강 하구 너머 북녘이 보이는 전망대.',pop:20},
- {id:'L041',name:'의정부 부대찌개거리',lat:37.7400,lng:127.0470,sido:'경기',gu:'의정부시',cat:'street',r:300,v:0,sets:['local'],desc:'부대찌개가 시작된 골목.',pop:55},
+ {id:'L041',name:'의정부 부대찌개거리',lat:37.7400,lng:127.0470,sido:'경기',gu:'의정부시',cat:'food',r:300,v:0,sets:['local','must'],desc:'부대찌개가 시작된 골목.',pop:55},
  {id:'L042',name:'다산유적지',lat:37.5400,lng:127.2560,sido:'경기',gu:'남양주시',cat:'palace',r:300,v:0,sets:['local'],desc:'정약용 생가와 묘. 실학박물관.',pop:20},
  {id:'L043',name:'물의정원',lat:37.5720,lng:127.2520,sido:'경기',gu:'남양주시',cat:'park',r:300,v:0,sets:['local'],desc:'북한강변 양귀비·코스모스 들판.',pop:20},
  {id:'L044',name:'미사경정공원',lat:37.5620,lng:127.1920,sido:'경기',gu:'하남시',cat:'park',r:300,v:0,sets:['local'],desc:'한강 옆 넓은 잔디와 자전거길.',pop:20},
@@ -461,10 +461,42 @@ window.LANDMARKS = [
  {id:'L231',name:'섭지코지',lat:33.4240,lng:126.9290,sido:'제주',gu:'서귀포시',cat:'sea',r:300,v:0,sets:['local'],desc:'성산 옆 들판과 등대, 절벽.',pop:86},
  {id:'L232',name:'중문 색달해변',lat:33.2440,lng:126.4100,sido:'제주',gu:'서귀포시',cat:'sea',r:300,v:0,sets:['local'],desc:'검은 모래가 섞인 해변. 큰 파도.',pop:76},
  {id:'L233',name:'카멜리아힐',lat:33.2900,lng:126.3690,sido:'제주',gu:'서귀포시',cat:'park',r:300,v:0,sets:['local'],desc:'동백 500품종이 피는 수목원.',pop:78},
+ // ── 필수 코스 (맛집·빵집·시장). 좌표는 대략값(v:0) — 현장 확인 뒤 보정
+ {id:'F001',name:'성심당 본점',lat:36.3277,lng:127.4273,sido:'대전',gu:'중구',cat:'food',r:150,v:0,sets:['must'],desc:'튀김소보로와 부추빵. 대전에 오면 꼭 들르는 빵집.',pop:95},
+ {id:'F002',name:'대전 중앙시장',lat:36.3290,lng:127.4330,sido:'대전',gu:'동구',cat:'street',r:150,v:0,sets:['must'],desc:'대전역 앞 큰 전통시장. 먹자골목이 유명하다.',pop:60},
+ {id:'F003',name:'이성당',lat:35.9868,lng:126.7113,sido:'전북',gu:'군산시',cat:'food',r:150,v:0,sets:['must'],desc:'우리나라에서 가장 오래된 빵집. 단팥빵과 야채빵.',pop:90},
+ {id:'F004',name:'PNB풍년제과 본점',lat:35.8190,lng:127.1437,sido:'전북',gu:'전주시',cat:'food',r:150,v:0,sets:['must'],desc:'전주 수제 초코파이의 원조.',pop:78},
+ {id:'F005',name:'전주 남부시장',lat:35.8115,lng:127.1475,sido:'전북',gu:'전주시',cat:'street',r:150,v:0,sets:['must'],desc:'한옥마을 옆 시장. 콩나물국밥과 야시장.',pop:76},
+ {id:'F006',name:'삼진어묵 본점',lat:35.0920,lng:129.0437,sido:'부산',gu:'영도구',cat:'food',r:150,v:0,sets:['must'],desc:'부산 어묵의 원조. 어묵 고로케.',pop:80},
+ {id:'F007',name:'부평깡통시장',lat:35.1015,lng:129.0262,sido:'부산',gu:'중구',cat:'street',r:150,v:0,sets:['must'],desc:'국제시장 옆 먹거리 시장. 야시장이 선다.',pop:82},
+ {id:'F008',name:'이재모피자 본점',lat:35.1022,lng:129.0297,sido:'부산',gu:'중구',cat:'food',r:150,v:0,sets:['must'],desc:'치즈가 넘치는 부산 대표 피자집.',pop:78},
+ {id:'F009',name:'해운대시장',lat:35.1625,lng:129.1612,sido:'부산',gu:'해운대구',cat:'street',r:150,v:0,sets:['must'],desc:'해운대 해변 앞 먹자골목 시장.',pop:72},
+ {id:'F010',name:'삼송빵집 본점',lat:35.8699,lng:128.5936,sido:'대구',gu:'중구',cat:'food',r:150,v:0,sets:['must'],desc:'통옥수수빵으로 이름난 대구 빵집.',pop:74},
+ {id:'F011',name:'맘모스제과',lat:36.5662,lng:128.7295,sido:'경북',gu:'안동시',cat:'food',r:150,v:0,sets:['must'],desc:'크림치즈빵으로 이름난 안동 빵집.',pop:80},
+ {id:'F012',name:'황남빵 본점',lat:35.8388,lng:129.2115,sido:'경북',gu:'경주시',cat:'food',r:150,v:0,sets:['must'],desc:'경주 팥빵의 원조.',pop:78},
+ {id:'F013',name:'죽도시장',lat:36.0350,lng:129.3650,sido:'경북',gu:'포항시',cat:'street',r:150,v:0,sets:['must'],desc:'동해안에서 가장 큰 수산시장. 물회와 과메기.',pop:76},
+ {id:'F014',name:'테라로사 커피공장',lat:37.6968,lng:128.8907,sido:'강원',gu:'강릉시',cat:'food',r:150,v:0,sets:['must'],desc:'강릉 커피 붐을 일으킨 로스터리 카페.',pop:82},
+ {id:'F015',name:'강릉 중앙시장',lat:37.7541,lng:128.8985,sido:'강원',gu:'강릉시',cat:'street',r:150,v:0,sets:['must'],desc:'닭강정과 호떡, 어묵고로케.',pop:84},
+ {id:'F016',name:'초당 순두부마을',lat:37.7910,lng:128.9150,sido:'강원',gu:'강릉시',cat:'food',r:150,v:0,sets:['must'],desc:'바닷물로 만든 순두부 식당이 모인 마을.',pop:80},
+ {id:'F017',name:'춘천 명동 닭갈비골목',lat:37.8797,lng:127.7277,sido:'강원',gu:'춘천시',cat:'food',r:150,v:0,sets:['must'],desc:'닭갈비집이 줄지어 선 골목.',pop:80},
+ {id:'F018',name:'광장시장',lat:37.5700,lng:126.9995,sido:'서울',gu:'종로구',cat:'street',r:150,v:0,sets:['must'],desc:'빈대떡과 마약김밥, 육회. 100년 넘은 시장.',pop:90},
+ {id:'F019',name:'통인시장',lat:37.5808,lng:126.9700,sido:'서울',gu:'종로구',cat:'street',r:150,v:0,sets:['must'],desc:'엽전으로 사 먹는 도시락 카페. 서촌 입구.',pop:70},
+ {id:'F020',name:'망원시장',lat:37.5560,lng:126.9060,sido:'서울',gu:'마포구',cat:'street',r:150,v:0,sets:['must'],desc:'망리단길 옆 먹거리 시장.',pop:72},
+ {id:'F021',name:'런던 베이글 뮤지엄 안국점',lat:37.5793,lng:126.9860,sido:'서울',gu:'종로구',cat:'food',r:150,v:0,sets:['must'],desc:'줄 서서 먹는 베이글 가게.',pop:76},
+ {id:'F022',name:'태극당 본점',lat:37.5595,lng:127.0052,sido:'서울',gu:'중구',cat:'food',r:150,v:0,sets:['must'],desc:'1946년에 문을 연 서울에서 가장 오래된 빵집. 모나카 아이스크림.',pop:72},
+ {id:'F023',name:'신포국제시장',lat:37.4718,lng:126.6270,sido:'인천',gu:'중구',cat:'street',r:150,v:0,sets:['must'],desc:'닭강정과 공갈빵. 차이나타운과 함께 돈다.',pop:76},
+ {id:'F024',name:'수원 통닭거리',lat:37.2797,lng:127.0172,sido:'경기',gu:'수원시',cat:'food',r:150,v:0,sets:['must'],desc:'가마솥 통닭집이 모인 골목. 화성 옆.',pop:78},
+ {id:'F026',name:'코롬방제과',lat:34.7893,lng:126.3838,sido:'전남',gu:'목포시',cat:'food',r:150,v:0,sets:['must'],desc:'크림치즈 바게트로 이름난 목포 빵집.',pop:72},
+ {id:'F027',name:'담양 국수거리',lat:35.3215,lng:126.9880,sido:'전남',gu:'담양군',cat:'food',r:150,v:0,sets:['must'],desc:'관방제림 옆 강변에 늘어선 국숫집.',pop:72},
+ {id:'F028',name:'궁전제과 충장점',lat:35.1478,lng:126.9172,sido:'광주',gu:'동구',cat:'food',r:150,v:0,sets:['must'],desc:'공룡알빵과 나비파이. 광주 대표 빵집.',pop:72},
+ {id:'F029',name:'통영 중앙시장',lat:34.8445,lng:128.4255,sido:'경남',gu:'통영시',cat:'street',r:150,v:0,sets:['must'],desc:'동피랑 아래 활어 시장. 꿀빵과 충무김밥.',pop:76},
+ {id:'F030',name:'제주 동문시장',lat:33.5118,lng:126.5265,sido:'제주',gu:'제주시',cat:'street',r:150,v:0,sets:['must'],desc:'제주에서 가장 큰 시장. 야시장.',pop:86},
+ {id:'F031',name:'서귀포 매일올레시장',lat:33.2497,lng:126.5632,sido:'제주',gu:'서귀포시',cat:'street',r:150,v:0,sets:['must'],desc:'서귀포 대표 시장. 흑돼지 꼬치와 귤.',pop:84},
+ {id:'F032',name:'오설록 티뮤지엄',lat:33.3061,lng:126.2893,sido:'제주',gu:'서귀포시',cat:'food',r:150,v:0,sets:['must'],desc:'녹차밭 옆 차 박물관. 녹차 아이스크림.',pop:86},
 ];
-window.SETS=[{id:'ktop100',name:'한국관광 100선',desc:'한국관광공사가 2년마다 뽑는 대표 관광지 100곳 (2025~2026)'},{id:'mt100',name:'100대 명산',desc:'산림청이 뽑은 우리나라 명산 100곳. 정상에서 도장'},{id:'natpark',name:'국립공원',desc:'국립공원 23곳. 산은 정상, 바다는 대표 해변·선착장'},{id:'local',name:'지역 명소',desc:'시·군·구마다 가까운 곳부터. 집 근처에서 첫 도장을'}];
+window.SETS=[{id:'ktop100',name:'한국관광 100선',desc:'한국관광공사가 2년마다 뽑는 대표 관광지 100곳 (2025~2026)'},{id:'mt100',name:'100대 명산',desc:'산림청이 뽑은 우리나라 명산 100곳. 정상에서 도장'},{id:'natpark',name:'국립공원',desc:'국립공원 23곳. 산은 정상, 바다는 대표 해변·선착장'},{id:'must',name:'필수 코스',desc:'그 지역에 가면 꼭 들르는 맛집·빵집·시장'},{id:'local',name:'지역 명소',desc:'시·군·구마다 가까운 곳부터. 집 근처에서 첫 도장을'}];
 /* 세트 소속: p.sets 가 없으면 한국관광 100선. 세트가 늘면 각 항목에 sets:['ktop100','np'] 식으로 적는다 */
 window.LANDMARKS.forEach(p => { if (!p.sets) p.sets = ['ktop100']; });
-window.CATS={palace:{name:'궁궐·사찰·유적',emoji:'🏯',color:'#E8573F'},mountain:{name:'산·자연',emoji:'⛰️',color:'#2FA36B'},sea:{name:'바다·섬·강',emoji:'🌊',color:'#2A86D6'},street:{name:'거리·마을·시장',emoji:'🏘️',color:'#F29A1F'},building:{name:'건축·박물관',emoji:'🏛️',color:'#7A5AF0'},park:{name:'공원·정원',emoji:'🌳',color:'#83B81A'}};
+window.CATS={palace:{name:'궁궐·사찰·유적',emoji:'🏯',color:'#E8573F'},mountain:{name:'산·자연',emoji:'⛰️',color:'#2FA36B'},sea:{name:'바다·섬·강',emoji:'🌊',color:'#2A86D6'},street:{name:'거리·마을·시장',emoji:'🏘️',color:'#F29A1F'},building:{name:'건축·박물관',emoji:'🏛️',color:'#7A5AF0'},park:{name:'공원·정원',emoji:'🌳',color:'#83B81A'},food:{name:'맛집·빵집·카페',emoji:'🥐',color:'#D9488B'}};
 window.SIDO_FULL={서울:'서울시',인천:'인천시',경기:'경기도',강원:'강원도',충북:'충청북도',충남:'충청남도',세종:'세종시',대전:'대전시',전북:'전라북도',전남:'전라남도',광주:'광주시',경북:'경상북도',경남:'경상남도',대구:'대구시',부산:'부산시',울산:'울산시',제주:'제주도'};
 window.SIDO_CENTER={서울:[126.99,37.56],인천:[126.55,37.45],경기:[127.30,37.38],강원:[128.45,37.70],충북:[127.75,36.75],충남:[126.85,36.50],세종:[127.29,36.48],대전:[127.38,36.35],전북:[127.10,35.75],전남:[126.85,34.95],광주:[126.85,35.16],경북:[128.75,36.30],경남:[128.25,35.25],대구:[128.60,35.87],부산:[129.05,35.17],울산:[129.31,35.54],제주:[126.55,33.40]};

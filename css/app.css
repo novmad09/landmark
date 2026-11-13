@@ -2,7 +2,7 @@
 :root{
   --bg:#F4F5F7; --ink:#1E2230; --ink-soft:#6B7183; --line:#E3E5EA; --card:#FFFFFF; --brand:#3D5AFE; --hot:#FF5A4E; --shadow:rgba(30,40,70,.14);
   --land:#EEF1EA; --green:#C9E6BE; --green-deep:#B2DAA4; --road:#FFFFFF; --road-edge:#D8DCD2; --road-major:#FFF3CF; --road-major-edge:#E6D49E; --block:rgba(30,40,60,.08); --sea:#BFDDF2; --river:#A6D0EE;
-  --c-palace:#E8573F; --c-mountain:#2FA36B; --c-sea:#2A86D6; --c-street:#F29A1F; --c-building:#7A5AF0; --c-park:#83B81A;
+  --c-palace:#E8573F; --c-mountain:#2FA36B; --c-sea:#2A86D6; --c-street:#F29A1F; --c-building:#7A5AF0; --c-park:#83B81A; --c-food:#D9488B;
   --ink-stamp:#1C1A17; --paper:#F5EFE3;
   --f-display:"Do Hyeon","Apple SD Gothic Neo",system-ui,sans-serif;
   --f-body:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
@@ -10,11 +10,11 @@
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --bg:#14161C; --ink:#EEF0F5; --ink-soft:#9AA0B2; --line:#2E333F; --card:#1E222B; --brand:#7C8FFF; --hot:#FF7A70; --shadow:rgba(0,0,0,.5);
   --land:#252A30; --green:#23372A; --green-deep:#1F4030; --road:#3A404C; --road-edge:#1B1F26; --road-major:#57523F; --road-major-edge:#22201A; --block:rgba(255,255,255,.05); --sea:#111B26; --river:#17304A;
-  --c-palace:#FF7A63; --c-mountain:#4CC48A; --c-sea:#5AA9F0; --c-street:#FFB547; --c-building:#A68CFF; --c-park:#A5D44A; --paper:#2A2621; color-scheme:dark}}
+  --c-palace:#FF7A63; --c-mountain:#4CC48A; --c-sea:#5AA9F0; --c-street:#FFB547; --c-building:#A68CFF; --c-park:#A5D44A; --c-food:#FF7EB6; --paper:#2A2621; color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#14161C; --ink:#EEF0F5; --ink-soft:#9AA0B2; --line:#2E333F; --card:#1E222B; --brand:#7C8FFF; --hot:#FF7A70; --shadow:rgba(0,0,0,.5);
   --land:#252A30; --green:#23372A; --green-deep:#1F4030; --road:#3A404C; --road-edge:#1B1F26; --road-major:#57523F; --road-major-edge:#22201A; --block:rgba(255,255,255,.05); --sea:#111B26; --river:#17304A;
-  --c-palace:#FF7A63; --c-mountain:#4CC48A; --c-sea:#5AA9F0; --c-street:#FFB547; --c-building:#A68CFF; --c-park:#A5D44A; --paper:#2A2621; color-scheme:dark}
+  --c-palace:#FF7A63; --c-mountain:#4CC48A; --c-sea:#5AA9F0; --c-street:#FFB547; --c-building:#A68CFF; --c-park:#A5D44A; --c-food:#FF7EB6; --paper:#2A2621; color-scheme:dark}
 
 *{box-sizing:border-box}
 html,body{height:100%;margin:0}

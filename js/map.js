@@ -10,6 +10,7 @@ const ICON = {
   sea: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2 9c2.5-2 4.5-2 7 0s4.5 2 7 0 4-2 6 0"/><path d="M2 14c2.5-2 4.5-2 7 0s4.5 2 7 0 4-2 6 0"/><path d="M2 19c2.5-2 4.5-2 7 0s4.5 2 7 0 4-2 6 0"/></svg>',
   street: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11c3-.5 5-3 9-6 4 3 6 5.5 9 6"/><path d="M5 11v8h14v-8"/><path d="M10 19v-5h4v5"/></svg>',
   building: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4"/><path d="M9 6h6l-1 8h-4z"/><path d="M10.5 14L9 21h6l-1.5-7"/><path d="M5 21h14"/></svg>',
+  food: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3v7a2.5 2.5 0 0 0 5 0V3M9.5 3v18"/><path d="M17 21V3c-2 1.5-3 4-3 7v3h3"/></svg>',
   park: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="9" r="5.5"/><path d="M12 14.5V21M8 21h8M12 17l-2.5-2"/></svg>',
 };
 /* 색 토큰은 테마가 바뀔 때만 다시 읽는다 (움직일 때마다 getComputedStyle 을 부르면 느리다) */
@@ -68,7 +69,8 @@ function nearCheck() { if (!S.me || !onNear) return; const now = Date.now(); con
   if (hit) { nearSeen[hit.id] = now; onNear(hit); } }
 const mode = () => { if (S.trip || S.filter.seen === 'yes') return 'near'; /* 다녀온 곳만 볼 땐 지역 묶음(서울·경기…) 없이 핀을 바로 보여 준다 */ const z = map.getZoom(); return z < 7.6 ? 'nat' : z < 11.2 ? 'city' : 'near'; };
 const P = (lng, lat) => { const p = map.project([lng, lat]); return [p.x, p.y]; };
-const visited = id => !!store.stampsOf(id);
+const visited = id => !!store.stampsOf(id) || !!(window.Memory && window.Memory.of(id)); /* 현장 도장이든 사진이든 다녀온 곳은 똑같이 다룬다 */
+const stampOf = id => store.stampsOf(id) || (m => m ? { count: Math.max(1, m.days.length), first: m.first, last: m.last } : null)(window.Memory && window.Memory.of(id));
 const remembered = id => !!(window.Memory && window.Memory.of(id)); /* 사진으로 찾은 추억 도장 */
 const been = id => visited(id) || remembered(id);
 const inRange = p => S.me && dist(S.me, p) - Math.min(S.me.accuracy || 0, cfg.maxAccuracy) <= p.r;
@@ -156,7 +158,7 @@ function onTap(e) { if (movedFlag) return; const it = e.currentTarget._item; if 
 /* ---------- 바텀시트 ---------- */
 const sheet = () => document.getElementById('sheet');
 function select(id) {
-  S.sel = id; const p = byId(id), s = store.stampsOf(id), d = S.me ? dist(S.me, p) : null, ok = cfg.testMode || (d !== null && inRange(p) && S.accuracyOk), today = s && s.last === window.Store.kstToday();
+  S.sel = id; const p = byId(id), s = stampOf(id), d = S.me ? dist(S.me, p) : null, ok = cfg.testMode || (d !== null && inRange(p) && S.accuracyOk), today = s && s.last === window.Store.kstToday();
   const sh = sheet(); sh.style.setProperty('--c', `var(--c-${p.cat})`);
   const cover = document.getElementById('cover'), ph = store.coverOf(id), md = (window.MEDIA || {})[id];
   const nPh = store.photosOf(id).length;
