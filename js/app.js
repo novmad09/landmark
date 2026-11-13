@@ -688,6 +688,7 @@ function openDetail(id) {
   el.querySelector('#dMap').onclick = () => { closeDetail(); showTab('map'); mapS.focus(id); };
   el.querySelector('#dHero').onclick = e => { if (e.target.closest('.back')) return; openGallery(id, 0); }; /* 뒤로 버튼은 사진 보기를 열지 않는다 */
   el.querySelector('#dPhoto').onclick = () => photoOrMemory(id);
+  { const fx = document.createElement('button'); fx.type = 'button'; fx.className = 'fixlink'; fx.textContent = '정보가 틀렸나요? 수정 제안하기'; fx.onclick = () => fixPlace(p); (el.querySelector('.body') || el).appendChild(fx); }
   { const dv = el.querySelector('#dVisit'); if (dv) dv.onclick = () => stampInfo(p, () => openDetail(id)); }
   el.querySelector('#dAdd').onclick = () => addToTrip(p);
   const ds = el.querySelector('#dStamp'); ds.oncontextmenu = e => e.preventDefault(); ds.onpointerdown = e => { if (ds.disabled) return; if (s && !(okStamp && store.stampsOf(id)?.last !== kstToday())) { e.preventDefault(); stampInfo(p, () => openDetail(id)); return; } /* 다녀온 곳이라도 오늘 여기 와 있으면 다시 찍을 수 있다 */ const ps = mapS.pos() || (cfg.testMode ? { lat: p.lat, lng: p.lng, accuracy: 5 } : null); if (!ps) return; e.preventDefault(); startStamp(p, ps, (r => ({ x: r.left + r.width / 2, y: r.top + r.height / 2, pointerId: e.pointerId }))(e.currentTarget.getBoundingClientRect()) /* 먹은 누른 도장에서부터 번진다 */); };
@@ -808,6 +809,21 @@ function openBadges() {
 }
 /* 명소 제안: 이름·설명 필수, 위치는 내 위치 또는 지도에서 찍기, 사진은 선택. 기기에 모아 두고 서버가 붙으면 보낸다 */
 const SG = { draft: null };
+/* 명소 수정 제안: 위치·설명이 틀렸거나 없어진 곳을 알려 준다. 지금 서 있는 자리를 올바른 위치로 함께 보낼 수 있다 */
+function fixPlace(p) { const pos = mapS.pos(), fresh = pos && pos.at && Date.now() - pos.at < 120000; const el = document.createElement('div'); el.className = 'login fixplace';
+  const KINDS = [['pos', '위치가 달라요'], ['info', '설명이 틀려요'], ['gone', '없어진 곳이에요'], ['etc', '그 밖에']];
+  el.innerHTML = `<div class="box"><h2>${esc(p.name)}</h2><p>어떤 점이 틀렸나요?</p><div class="fixk">${KINDS.map(([k, t], i) => `<button type="button" class="chip" data-k="${k}" aria-pressed="${i === 0}">${t}</button>`).join('')}</div>
+    <textarea id="fxText" class="bigin" rows="3" maxlength="300" placeholder="자세히 알려 주시면 빨리 고칠 수 있어요"></textarea>
+    ${fresh ? '<label class="fixpos"><input type="checkbox" id="fxPos" checked> 지금 내가 서 있는 곳을 올바른 위치로 함께 보내기</label>' : ''}
+    <button class="btn primary" type="button" id="fxOk">보내기</button><button class="btn ghost cancel" type="button">취소</button></div>`;
+  document.getElementById('app').appendChild(el); let kind = 'pos'; const posBox = () => { const l = el.querySelector('.fixpos'); if (l) l.hidden = kind !== 'pos'; }; posBox();
+  el.querySelectorAll('[data-k]').forEach(b => b.onclick = () => { kind = b.dataset.k; el.querySelectorAll('[data-k]').forEach(x => x.setAttribute('aria-pressed', String(x === b))); posBox(); });
+  el.querySelector('.cancel').onclick = () => el.remove(); el.onclick = e => { if (e.target === el) el.remove(); };
+  el.querySelector('#fxOk').onclick = async () => { const text = el.querySelector('#fxText').value.trim(), cb = el.querySelector('#fxPos'), sendPos = kind === 'pos' && cb && cb.checked;
+    if (!text && !sendPos) { toast('어떤 점이 틀렸는지 적어 주세요'); return; }
+    const rec = { placeId: p.id, name: p.name, kind, text, pos: sendPos ? { lat: pos.lat, lng: pos.lng, accuracy: pos.accuracy || null } : null, at: new Date().toISOString() };
+    const l = LS.get('lm-fix', []); l.push(rec); LS.set('lm-fix', l); try { await window.Store.Safety.report('place', p.id, kind, { text, pos: rec.pos }); } catch (e) {}
+    el.remove(); toast('고마워요! 확인하고 고칠게요'); }; }
 async function suggestPlace(draft) {
   const d = SG.draft = draft || SG.draft || { name: '', desc: '', pos: null, photo: null };
   const me = mapS.pos(); if (!d.pos && me) d.pos = { lat: me.lat, lng: me.lng, from: 'me' };

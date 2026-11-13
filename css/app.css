@@ -807,3 +807,7 @@ p.spot{margin:0 16px 2px}
 .minisel button[aria-selected="true"]{background:var(--bg);font-weight:700}
 .rkseg{margin:10px 0 4px}.routepick .box{text-align:center}.routepick a.btn{display:flex;align-items:center;justify-content:center;text-decoration:none}
 .visitbtn{white-space:nowrap;max-width:100%}.visitbtn b{font-size:15px}
+
+/* 명소 수정 제안 */
+.fixlink{display:block;margin:18px auto 6px;font:inherit;font-size:14px;color:var(--ink-soft);background:none;border:0;text-decoration:underline;text-underline-offset:3px;cursor:pointer;padding:10px}
+.fixk{display:flex;flex-wrap:wrap;gap:8px}.fixpos{display:flex;gap:8px;align-items:flex-start;font-size:14px;line-height:1.45;color:var(--ink-soft);text-align:left}.fixpos input{flex:none;width:20px;height:20px;margin-top:1px}
