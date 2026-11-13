@@ -2,7 +2,8 @@
    정류장 사이 이동(수단·방법·시간), 한 줄 팁. 저장하거나 그대로 가이드로 올린다. */
 window.TripEditor = (function () {
 const MODES = ['도보', '자차', '대중교통', '기타'], SUBS = ['버스', '지하철', '기차', '택시'];
-const STAYS = ['', '30분', '1시간', '2시간', '3시간', '반나절'], MINS = ['', '5', '10', '20', '30', '45', '60', '90', '120'], HOURS = [2, 3, 4, 5, 6, 8, 10, 12, 24, 48, 72];
+const STAYS = ['', '30분', '1시간', '2시간', '3시간', '반나절'], MINS = ['', '5', '10', '20', '30', '45', '60', '90', '120'], HOURS = [4, 8, 24, 48, 72]; /* 반나절 / 하루 / 1박 2일 / 2박 3일 / 3박 4일 */
+const snapHours = h => h >= 60 ? 72 : h >= 36 ? 48 : h >= 18 ? 24 : h > 5 ? 8 : 4;
 const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 
 /* ctx: { store, Trips, TripPhotos, byId, L, toast, ask, matchQ, shrink, hoursLabel, dist, openPhotos(items, i), onSaved(t), onPublish(t, draft) } */
@@ -11,7 +12,7 @@ function open(t, ctx, opts) {
   const stamps = store.allStamps(); const user = store.getUser() || { id: 'local', nickname: '여행자' };
   const guess = (a, b) => dist(a, b) < 1500 ? '도보' : '대중교통';
   // 작업 사본
-  const d = { name: t.name, order: t.ids.filter(byId), notes: { ...(t.notes || {}) }, stay: { ...(t.stay || {}) }, photos: JSON.parse(JSON.stringify(t.photos || {})), legs: JSON.parse(JSON.stringify(t.legs || {})), tip: t.tip || '', hours: t.hours || 6 };
+  const d = { name: t.name, order: t.ids.filter(byId), notes: { ...(t.notes || {}) }, stay: { ...(t.stay || {}) }, photos: JSON.parse(JSON.stringify(t.photos || {})), legs: JSON.parse(JSON.stringify(t.legs || {})), tip: t.tip || '', hours: snapHours(t.hours || 8) };
   const legKey = i => d.order[i] + '>' + d.order[i + 1];
   const legAt = i => d.legs[legKey(i)] || (d.legs[legKey(i)] = { mode: guess(byId(d.order[i]), byId(d.order[i + 1])), sub: '', text: '', mins: '' });
   const el = document.createElement('section'); el.className = 'detail open tripedit'; el.setAttribute('aria-hidden', 'false');
@@ -78,6 +79,14 @@ function open(t, ctx, opts) {
     pk.querySelectorAll('[data-lm]').forEach(b => b.onclick = () => { (d.photos[id] = d.photos[id] || []).push({ src: 'lm', id: b.dataset.lm }); dirty = true; pk.remove(); render(); });
     pk.querySelector('#pkFile').onchange = async e => { const f = e.target.files[0]; if (!f) return; toast('사진 줄이는 중…'); try { const url = await shrink(f, 1400); const ph = await TripPhotos.add(t.id, id, url); (d.photos[id] = d.photos[id] || []).push({ src: 'tp', id: ph.id }); dirty = true; pk.remove(); render(); } catch (err) { toast('사진을 불러오지 못했어요'); } }; };
 
+  /* 시간 고르기: 폰의 큰 선택 창 대신, 누른 자리 아래에 작은 목록을 띄워 위아래로 굴려 고른다 */
+  let mini = null; const closeMini = () => { if (mini) { mini.remove(); mini = null; } };
+  el.addEventListener('click', e => { if (e.target.closest('.minisel')) return; const box = e.target.closest('.stay, .row2 label'); const sel = box && box.querySelector('select'); if (!sel) { closeMini(); return; } e.preventDefault(); closeMini();
+    const r = sel.getBoundingClientRect(), er = el.getBoundingClientRect(); mini = document.createElement('div'); mini.className = 'minisel'; mini.setAttribute('role', 'listbox');
+    mini.innerHTML = [...sel.options].map(o => `<button type="button" role="option" data-v="${esc(o.value)}" aria-selected="${o.selected}">${esc(o.textContent)}</button>`).join('');
+    const below = er.bottom - r.bottom > 190; mini.style.left = `${Math.max(8, Math.min(r.left - er.left, er.width - 168))}px`; mini.style.top = `${(below ? r.bottom + 4 : r.top - 184) - er.top + el.scrollTop}px`;
+    el.appendChild(mini); const cur = mini.querySelector('[aria-selected="true"]'); if (cur) mini.scrollTop = cur.offsetTop - 60;
+    mini.onclick = ev => { const b = ev.target.closest('[data-v]'); if (!b) return; sel.value = b.dataset.v; sel.dispatchEvent(new Event('change', { bubbles: true })); closeMini(); }; });
   render(); document.getElementById('app').appendChild(el);
   if (opts.focusPublish) setTimeout(() => el.querySelector('#tePub').scrollIntoView(), 50);
   return el;

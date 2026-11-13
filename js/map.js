@@ -122,7 +122,7 @@ function renderOverlay() {
   for (const [k, el] of pool) if (!seen.has(k)) { el.remove(); pool.delete(k); }
   if (!meEl) { meEl = document.createElement('div'); meEl.className = 'me'; ov.appendChild(meEl); }
   if (S.me) { const [mx, my] = P(S.me.lng, S.me.lat); meEl.style.transform = `translate(${mx - 11}px,${my - 11}px)`; meEl.hidden = false; meEl.classList.toggle('stale', !S.live); } else meEl.hidden = true;
-  ['jNear', 'jCity', 'jNat'].forEach((id, i) => document.getElementById(id).setAttribute('aria-pressed', String(['near', 'city', 'nat'][i] === m)));
+  { const z = map.getZoom(), cur = m === 'near' ? (z >= 13.2 ? 'jNear' : 'jWide') : m === 'city' ? 'jCity' : 'jNat'; ['jNear', 'jWide', 'jCity', 'jNat'].forEach(id => document.getElementById(id).setAttribute('aria-pressed', String(id === cur))); }
   drawGeo();
 }
 let geoSig = '';
@@ -179,7 +179,7 @@ function select(id) {
   const far = !today && !cfg.testMode && d !== null && !inRange(p);
   go.hidden = !far;
   if (far) go.innerHTML = near ? `<b>${fmt(Math.max(1, d - p.r))}</b> 더 가세요` : `여기서 <b>${fmt(d)}</b>${travelTime(d)}`;
-  document.getElementById('routeBtn').href = routeUrl(p);
+  { const rb = document.getElementById('routeBtn'); rb.href = routeUrl(p); rb.dataset.route = p.id; }
   document.getElementById('addTripBtn').onclick = () => onAddTrip && onAddTrip(p);
   const pb = document.getElementById('photoBtn'); pb.onclick = () => onPhoto && onPhoto(p, !!s); pb.classList.toggle('dim', !s);
   cover.onclick = () => onGallery && onGallery(p);
@@ -272,8 +272,9 @@ function init(opts) {
   mapEl = document.getElementById('map'); ov = document.getElementById('ov');
   let last = null; try { last = JSON.parse(localStorage.getItem('lm-lastpos')); } catch (e) {}
   S = { me: last, live: false, accuracyOk: false, sel: null, filter: { set: '', cat: '', sido: '', gu: '', seen: '' } };
-  map = new maplibregl.Map({ container: 'gl', style: styleWithSources(), center: last ? [last.lng, last.lat] : [127.0, 37.55], zoom: last ? 12.5 : 11, minZoom: 5.5, maxZoom: 18, dragRotate: false, pitchWithRotate: false,
+  map = new maplibregl.Map({ container: 'gl', style: styleWithSources(), center: last ? [last.lng, last.lat] : [127.0, 37.55], zoom: last ? 12.5 : 11, minZoom: 5.5, maxZoom: 18, dragRotate: false, pitchWithRotate: false, touchPitch: false, maxPitch: 0, /* 기울이기·돌리기 없음: 늘 위에서 본 평면 지도 */
     attributionControl: { compact: true } }); /* 출처 문구는 타일 스타일에 들어 있다 (중복 방지) */
+  try { map.touchZoomRotate.disableRotation(); map.keyboard.disableRotation(); } catch (e) {}
   map.touchZoomRotate.disableRotation(); map.keyboard.disableRotation(); 
   map.addControl(new maplibregl.ScaleControl({ unit: 'metric', maxWidth: 90 }), 'bottom-left');
   let errShown = false; map.on('error', e => { if (!errShown && /tile|source|fetch|network/i.test(String(e?.error?.message || ''))) { errShown = true; opts.toast('지도 데이터를 불러오지 못했어요. 인터넷 연결을 확인해 주세요'); } });
@@ -293,6 +294,7 @@ function init(opts) {
   document.getElementById('stampBtn').oncontextmenu = e => e.preventDefault();
   document.getElementById('stampBtn').onpointerdown = e => { const p = byId(S.sel); if (!p || e.currentTarget.disabled) return; if (e.currentTarget.classList.contains('stamped') && !(cfg.testMode || (S.me && inRange(p) && S.accuracyOk && store.stampsOf(p.id)?.last !== window.Store.kstToday()))) { e.preventDefault(); onStampInfo && onStampInfo(p); return; } const pos = S.me || (cfg.testMode ? { lat: p.lat, lng: p.lng, accuracy: 5 } : null); if (!pos) return; e.preventDefault(); onStamp(p, pos, (r => ({ x: r.left + r.width / 2, y: r.top + r.height / 2, pointerId: e.pointerId }))(e.currentTarget.getBoundingClientRect()) /* 먹은 누른 도장에서부터 번진다 */); };
   document.getElementById('jNear').onclick = () => S.me ? map.flyTo({ center: [S.me.lng, S.me.lat], zoom: 14 }) : startGPS();
+  document.getElementById('jWide').onclick = () => { const c = S.me ? [S.me.lng, S.me.lat] : map.getCenter(); map.flyTo({ center: c, zoom: 12.2 }); }; /* 내 주변보다 한 단계 넓게 */
   document.getElementById('jCity').onclick = () => { const base = S.me || { lat: map.getCenter().lat, lng: map.getCenter().lng }; const p = L.map(p => ({ p, d: dist(base, p) })).sort((a, b) => a.d - b.d)[0].p; const ms = L.filter(q => q.sido === p.sido); const b = new maplibregl.LngLatBounds(); ms.forEach(q => b.extend([q.lng, q.lat])); const c = window.SIDO_CENTER[p.sido]; if (c) b.extend(c); map.fitBounds(b, { padding: 70, maxZoom: 10.5, duration: 800 }); };
   document.getElementById('jNat').onclick = () => map.fitBounds([[125.0, 33.1], [130.95, 38.65]], { padding: 30, duration: 900 });
   document.getElementById('gpsBtn').onclick = () => startGPS();
@@ -309,7 +311,7 @@ function init(opts) {
     const done = v => { ov.hidden = true; res(v); }; document.getElementById('pickNo').onclick = () => done(null); document.getElementById('pickOk').onclick = () => { const c = map.getCenter(); done({ lat: +c.lat.toFixed(6), lng: +c.lng.toFixed(6) }); }; }); },
   /* 지금 보고 있는 지역: 전국 보기면 전국, 시·도 보기면 시·도, 더 들어가 있으면 시·군·구 */
   region() { const md = mode(); if (md === 'nat' && !S.trip) return {}; const c = map.getCenter(); const near = L.map(p => ({ p, d: dist({ lat: c.lat, lng: c.lng }, p) })).sort((a, b) => a.d - b.d)[0]; if (!near || near.d > 80000) return {}; if (md === 'city') return { sido: near.p.sido }; const n = L.filter(p => p.sido === near.p.sido && p.gu === near.p.gu).length; return n >= 5 ? { sido: near.p.sido, gu: near.p.gu } : { sido: near.p.sido }; }, // 시·군·구에 5곳 미만이면 시·도로
-  splitDesc, refreshMem, setFilter(f) { Object.assign(S.filter, { set: '', cat: '', sido: '', gu: '', seen: '' }, f); renderFilterBtn(); renderUI(); for (const [k, e] of pool) { e.remove(); pool.delete(k); } dirty(); }, showTrip, refresh() { renderUI(); if (S.sel) select(S.sel); paintRegions(); dirty(); }, regionStats, select, closeSheet, focus(id) { const p = byId(id); map.flyTo({ center: [p.lng, p.lat], zoom: 14 }); select(id); }, resize() { map.resize(); dirty(); }, pos: () => S.me, ICON, fmt, routeUrl };
+  splitDesc, refreshMem, setFilter(f) { Object.assign(S.filter, { set: '', cat: '', sido: '', gu: '', seen: '' }, f); renderFilterBtn(); renderUI(); for (const [k, e] of pool) { e.remove(); pool.delete(k); } dirty(); }, showTrip, refresh() { renderUI(); if (S.sel) select(S.sel); paintRegions(); dirty(); }, regionStats, select, closeSheet, focus(id) { const p = byId(id); map.flyTo({ center: [p.lng, p.lat], zoom: 12.8 }); select(id); } /* 너무 가깝지 않게: 주변 명소가 같이 보이는 정도 */, resize() { map.resize(); dirty(); }, pos: () => S.me, ICON, fmt, routeUrl };
 }
 return { init };
 })();

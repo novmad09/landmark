@@ -95,25 +95,26 @@ function open({ place, check, commit, onPhoto, onDone, onDogam, onCancel, toast,
     else if (state === 'fail') { const k = Math.min(1, (now - t0) / 500); drawInk(1 - k); if (k >= 1) { state = 'idle'; fill = 0; holdDone = false; } }
     if (state !== 'done') raf = requestAnimationFrame(frame); else raf = null;
   }
-  function finish() { Snd.chime(); el.classList.add('done'); const v = result?.visitNo || 1; el.querySelector('#rTitle').textContent = `${place.name}`; el.querySelector('#rSub').textContent = `${window.Store.kstToday().replaceAll('-', '.')} · 방문 ${v}회${v > 1 ? ' · 다시 와 주셨네요' : (() => { const m = window.Memory && window.Memory.of(place.id); if (!m) return ' · 첫 도장이에요'; const y = Math.floor((Date.parse(window.Store.kstToday()) - Date.parse(m.last)) / 31557600000); return y >= 1 ? ` · ${y}년 만에 다시 왔어요` : ' · 추억의 그곳에 다시 왔어요'; })()}`; onDone && onDone(result); }
+  function finish() { el.classList.add('done'); try { Snd.chime(); } catch (e) {} const v = result?.visitNo || 1; el.querySelector('#rTitle').textContent = `${place.name}`; el.querySelector('#rSub').textContent = `${window.Store.kstToday().replaceAll('-', '.')} · 방문 ${v}회${v > 1 ? ' · 다시 와 주셨네요' : (() => { const m = window.Memory && window.Memory.of(place.id); if (!m) return ' · 첫 도장이에요'; const y = Math.floor((Date.parse(window.Store.kstToday()) - Date.parse(m.last)) / 31557600000); return y >= 1 ? ` · ${y}년 만에 다시 왔어요` : ' · 추억의 그곳에 다시 왔어요'; })()}`; onDone && onDone(result); }
 
   let pid = null, closed = false; /* 누르기 시작한 손가락만 본다. 다른 손가락이 닿았다 떼도 무시 */
   function begin(cx, cy, id) { pid = id ?? null; clearTimeout(autoT); committed = false; result = null; el.classList.remove('again'); el.querySelector('.guide p').textContent = '꾸우욱 누르고 계세요.'; { const er = el.getBoundingClientRect(); press = cx != null ? { x: cx - er.left, y: cy - er.top } : { x: W / 2, y: H / 2 - 20 }; /* 누른 자리(도장 버튼)에서부터 번진다 */
-      maxR = Math.max(...[[0, 0], [W, 0], [0, H], [W, H]].map(([x, y]) => Math.hypot(x - press.x, y - press.y))) * 1.08; } state = 'filling'; t0 = performance.now(); lastVib = 0; Snd.brush(); if (!reduce()) vib(holdPattern());
+      maxR = Math.max(...[[0, 0], [W, 0], [0, H], [W, H]].map(([x, y]) => Math.hypot(x - press.x, y - press.y))) * 1.08; } state = 'filling'; t0 = performance.now(); lastVib = 0; try { Snd.brush(); } catch (e) {} if (!reduce()) vib(holdPattern());
     checked = check ? check() : { ok: true }; // 찍을 수 있는지만 본다. 기록은 손을 뗄 때
     if (!raf) raf = requestAnimationFrame(frame); }
   function down(e) { if (!['idle', 'releasing', 'fail'].includes(state) || el.classList.contains('done')) return; if (e.target.closest('.cancel')) return; e.preventDefault(); fill = 0; holdDone = false; begin(e.clientX, e.clientY, e.pointerId); } /* 중간에 뗐다가 바로 다시 눌러도 받는다 */
   async function up(e) { if (state !== 'filling') return; if (pid !== null && e.pointerId !== undefined && e.pointerId !== pid) return; clearTimeout(autoT); e.preventDefault();
     if (fill < 1) { state = 'releasing'; t0 = performance.now(); vib(0); vib(15); el.classList.remove('inking'); // 중간에 떼면 아무것도 기록하지 않는다
       el.querySelector('.guide p').textContent = ''; return; }
-    if (checked && !checked.ok) { state = 'fail'; t0 = performance.now(); vib([30, 40, 30]); el.classList.remove('inking'); toast && toast(checked.reason); return; }
-    state = 'slam'; t0 = performance.now(); Snd.thud(); /* 여기서 처음으로 기록한다 */
+    const bail = why => { vib(0); vib([30, 40, 30]); close(); toast && toast(why); onCancel && onCancel(true); }; /* 못 찍으면 이유를 알리고 보던 화면으로 돌아간다 */
+    if (checked && !checked.ok) { bail(checked.reason); return; }
+    state = 'slam'; t0 = performance.now(); try { Snd.thud(); } catch (e) {} /* 여기서 처음으로 기록한다 */
     let r; try { r = await commit(); } catch (e2) { r = { ok: false, reason: '저장 중 문제가 생겼어요' }; }
     if (closed) return; /* 저장 기다리는 중에 닫았으면 아무것도 안 한다 */
-    if (!r || !r.ok) { state = 'fail'; t0 = performance.now(); committed = false; vib([30, 40, 30]); el.classList.remove('inking'); toast && toast(r?.reason || '인증에 실패했어요'); if (!raf) raf = requestAnimationFrame(frame); return; }
+    if (!r || !r.ok) { bail(r?.reason || '인증에 실패했어요'); return; }
     result = r; committed = true; }
     // 떼는 건 어디서 떼도 받는다 (바텀시트의 도장에서 시작한 경우 포함)
-  el.addEventListener('pointerdown', down); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
+  window.addEventListener('pointerup', up); /* 화면 아무 데나 눌러서는 시작되지 않는다. 도장 버튼에서만 */ window.addEventListener('pointercancel', up);
   el.addEventListener('contextmenu', e => e.preventDefault());
   el.querySelector('.cancel').onclick = () => { close(); onCancel && onCancel(); };
   el.querySelector('#rDogam').onclick = () => { close(); onDogam && onDogam(result); };
