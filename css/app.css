@@ -811,3 +811,6 @@ p.spot{margin:0 16px 2px}
 /* 명소 수정 제안 */
 .fixlink{display:block;margin:18px auto 6px;font:inherit;font-size:14px;color:var(--ink-soft);background:none;border:0;text-decoration:underline;text-underline-offset:3px;cursor:pointer;padding:10px}
 .fixk{display:flex;flex-wrap:wrap;gap:8px}.fixpos{display:flex;gap:8px;align-items:flex-start;font-size:14px;line-height:1.45;color:var(--ink-soft);text-align:left}.fixpos input{flex:none;width:20px;height:20px;margin-top:1px}
+
+/* 지도의 명소 제안 버튼 (추천 버튼 위) */
+.rank.sugg{bottom:130px}

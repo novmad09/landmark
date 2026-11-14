@@ -764,7 +764,7 @@ function renderMe() {
       <details class="prog progme"><summary>지역별 진행 <span>${sidos.length ? sidos.length + '개 시·도' : ''}</span></summary><div class="progbody">${sidos.length ? sidos.map(x => bar(x.sd, x.d, x.n)).join('') : '<p class="note">아직 도장이 없어요.</p>'}</div></details>
       <div class="melist">
         <button type="button" id="meMem"><span>📷 추억 사진 더하기</span><small>${window.Memory.count() ? `사진 ${window.Memory.count()}장 · 명소 ${Object.keys(window.Memory.places()).length}곳` : '지난 여행 사진으로 다녀온 곳을 찾아요'}</small></button>
-        <button type="button" id="meSuggest"><span>📍 좋은 명소를 추천해 주세요</span><small>확인하고 지도에 넣을게요</small></button>
+        <button type="button" id="meSuggest"><span>💬 문의·제안</span><small>앱에 바라는 점이나 불편한 점을 알려 주세요</small></button>
         <button type="button" id="meNotify" class="tog" role="switch" aria-checked="false"><span>🔔 알림 받기</span><i class="sw"></i></button>
         ${DEV ? `<button type="button" id="meTest"><span>🧪 테스트 모드</span><small>${cfg.testMode ? '켜짐 · 어디서나 도장' : '꺼짐 · 반경 안에서만'}</small></button>` : ''}
         ${Trips.trash().length ? `<button type="button" id="meTrash"><span>🗑 삭제한 여행 ${Trips.trash().length}</span><small>30일 안에 되살릴 수 있어요</small></button>` : ''}
@@ -783,7 +783,7 @@ function renderMe() {
   const mb = $('#meBio'); if (mb) mb.onclick = async () => { const n = await ask({ title: '내 목표', input: '예: 올해 100대 명산 10곳', value: bio, yes: '저장', no: '취소' }); if (n !== null && n !== false) { LS.set('lm-bio', n); renderMe(); } };
   const av = $('#meAvatar'); if (av) av.onclick = () => toast('캐릭터는 곧 꾸밀 수 있어요');
   const mm = $('#meMem'); if (mm) mm.onclick = () => memImport({});
-  const sg = $('#meSuggest'); if (sg) sg.onclick = () => suggestPlace();
+  const sg = $('#meSuggest'); if (sg) sg.onclick = () => feedback();
   const tr = $('#meTrash'); if (tr) tr.onclick = openTrash;
   const bl = $('#meBlocked'); if (bl) bl.onclick = async () => { const ids = [...window.Store.Safety.blocked()]; const el = document.createElement('div'); el.className = 'login pick'; el.innerHTML = `<div class="box"><h2>차단한 사용자</h2><div class="picklist">${ids.map(id => `<button type="button" class="pk" data-u="${id}"><b>${id}</b><small>눌러서 차단 풀기</small></button>`).join('')}</div><button class="btn ghost" type="button" id="pkNo">닫기</button></div>`; document.getElementById('app').appendChild(el); el.onclick = e => { if (e.target === el) el.remove(); }; el.querySelector('#pkNo').onclick = () => el.remove(); el.querySelectorAll('[data-u]').forEach(b => b.onclick = () => { window.Store.Safety.unblock(b.dataset.u); el.remove(); renderMe(); mapS.refresh(); toast('차단을 풀었어요'); }); };
   const wp = $('#wipe'); if (wp) wp.onclick = async () => { if (!(await ask({ title: '계정과 기록을 모두 지울까요?', text: '도장·여행·사진·가이드·뱃지가 모두 지워져요. 되돌릴 수 없어요.', yes: '모두 삭제', no: '취소' }))) return; if (!(await ask({ title: '정말 지울까요?', text: '마지막 확인이에요.', yes: '네, 지워요', no: '아니오' }))) return; try { await window.Store.wipeAll(); } catch (e) { toast(e.message || '삭제하지 못했어요'); return; } location.hash = ''; location.reload(); };
@@ -809,6 +809,15 @@ function openBadges() {
 }
 /* 명소 제안: 이름·설명 필수, 위치는 내 위치 또는 지도에서 찍기, 사진은 선택. 기기에 모아 두고 서버가 붙으면 보낸다 */
 const SG = { draft: null };
+/* 문의·제안: 앱에 대한 의견 (명소 제안은 지도의 '제안' 버튼) */
+function feedback() { const el = document.createElement('div'); el.className = 'login feedback';
+  el.innerHTML = `<div class="box"><h2>문의·제안</h2><p>앱에 바라는 점이나 불편한 점을 알려 주세요.</p><textarea id="fbText" class="bigin" rows="5" maxlength="500" placeholder="예: 이런 기능이 있으면 좋겠어요"></textarea><p class="note">명소를 추천하려면 지도 화면의 '제안'을 눌러 주세요.</p><button class="btn primary" type="button" id="fbOk">보내기</button><button class="btn ghost cancel" type="button">취소</button></div>`;
+  document.getElementById('app').appendChild(el); el.querySelector('.cancel').onclick = () => el.remove(); el.onclick = e => { if (e.target === el) el.remove(); };
+  el.querySelector('#fbOk').onclick = async () => { const text = el.querySelector('#fbText').value.trim(); if (text.length < 5) { toast('조금 더 자세히 적어 주세요'); return; }
+    const l = LS.get('lm-feedback', []); l.push({ text, v: cfg.version, at: new Date().toISOString() }); LS.set('lm-feedback', l); try { await window.Store.Safety.report('feedback', 'app', 'feedback', { text }); } catch (e) {}
+    el.remove(); toast('고마워요! 잘 읽어 볼게요'); }; }
+/* 지도의 '제안': 지금 있는 곳을 명소로 제안한다 */
+document.getElementById('suggBtn').onclick = async () => { if (!(await requireLogin())) return; if (!mapS.pos()) toast('내 위치를 켜면 지금 있는 곳으로 제안할 수 있어요'); suggestPlace(); };
 /* 명소 수정 제안: 위치·설명이 틀렸거나 없어진 곳을 알려 준다. 지금 서 있는 자리를 올바른 위치로 함께 보낼 수 있다 */
 function fixPlace(p) { const pos = mapS.pos(), fresh = pos && pos.at && Date.now() - pos.at < 120000; const el = document.createElement('div'); el.className = 'login fixplace';
   const KINDS = [['pos', '위치가 달라요'], ['info', '설명이 틀려요'], ['gone', '없어진 곳이에요'], ['etc', '그 밖에']];
