@@ -54,7 +54,7 @@ function evaluate(ctx) {
   { const best = Math.max(0, ...vals.map(s => new Set((s.months || []).map(m => Math.floor(((typeof m === 'string' ? +m.slice(-2) : m) % 12) / 3))).size)); add({ id: 'seasons', group: '순간', name: '한 곳 사계절', band: '사계절', sub: '같은 곳을 네 계절에', glyph: 'tree', ink: '#2FA36B', cur: best, max: 4 }); }
   add({ id: 'photos', group: '행동', name: '사진 20장', band: '사진 20장', sub: `${ctx.photos || 0}장`, glyph: 'cam', ink: '#7A5AF0', cur: Math.min(ctx.photos || 0, 20), max: 20 });
   add({ id: 'guides', group: '행동', name: '동선 3개 공유', band: '동선 3개', sub: `${ctx.sharedGuides || 0}개 올림`, glyph: 'map', ink: '#F29A1F', cur: Math.min(ctx.sharedGuides || 0, 3), max: 3 });
-  { const n = ctx.suggests || 0; const steps = [[3, '동'], [10, '은'], [30, '금']]; const t = tierOf(n, steps), nx = nextStep(n, steps); add({ id: 'suggest', group: '행동', name: `명소 제안 ${n >= 30 ? '30' : nx[0]}`, band: '동네 지킴이', sub: `${n}곳 제안`, glyph: 'pin', ink: INK[t || '동'], cur: n, max: nx[0], tier: t, locked: !t, done: !!t }); }
+  { const n = ctx.suggests || 0; const steps = [[1, '동'], [5, '은'], [10, '금']]; const t = tierOf(n, steps), nx = nextStep(n, steps); add({ id: 'suggest', group: '행동', name: `명소 발견 ${n >= 10 ? '10' : nx[0]}`, band: '발견자', sub: `제안한 곳 ${n}곳이 명소가 됨`, glyph: 'pin', ink: INK[t || '동'], cur: n, max: nx[0], tier: t, locked: !t, done: !!t }); }
   { const n = (ctx.myGuides || []).reduce((a, g) => a + (g.completions || 0), 0); add({ id: 'followers', group: '행동', name: '길동무 3명', band: '길동무', sub: `내 동선을 ${n}명이 완주`, glyph: 'people', ink: '#2A86D6', cur: Math.min(n, 3), max: 3 }); }
   return out.filter(b => !b.hide);
 }

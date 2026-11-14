@@ -814,3 +814,6 @@ p.spot{margin:0 16px 2px}
 
 /* 지도의 명소 제안 버튼 (추천 버튼 위) */
 .rank.sugg{bottom:130px}
+
+.foundby{margin:2px 0 6px;font-size:14px;color:var(--ink-soft)}.foundby b{color:var(--ink)}
+div.pk{display:flex;flex-direction:column;gap:2px;padding:12px 14px;border-radius:12px;background:var(--bg);text-align:left}div.pk small{color:var(--ink-soft);font-size:13px}

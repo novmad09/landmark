@@ -478,7 +478,9 @@ const shareTripImage = t => shareImage(() => window.ShareCard.trip(t, { stamps: 
 const shareBadgeImage = b => shareImage(() => window.ShareCard.badge(b), `뱃지-${b.name}.png`, b.name);
 
 /* ---------- 뱃지 ---------- */
-function badgeCtx() { const u = store.getUser(); const mine = window.Guides.all().filter(g => g.mine); return { stamps: allSeen(), suggests: LS.get('lm-suggest', []).length, photos: u ? store.photos.filter(x => x.userId === u.id).length : 0, myGuides: mine, sharedGuides: mine.length, regionStats: mapS.regionStats() }; }
+/* 내가 제안해서 명소가 된 곳 (data.js 의 by: 발견한 사람 닉네임) */
+function foundByMe() { const u = store.getUser(); return u && u.nickname ? L.filter(p => p.by && p.by === u.nickname) : []; }
+function badgeCtx() { const u = store.getUser(); const mine = window.Guides.all().filter(g => g.mine); return { stamps: allSeen(), suggests: foundByMe().length, /* 뱃지는 제안한 수가 아니라 통과돼 명소가 된 수 */ photos: u ? store.photos.filter(x => x.userId === u.id).length : 0, myGuides: mine, sharedGuides: mine.length, regionStats: mapS.regionStats() }; }
 const badgeList = () => window.Badges.evaluate(badgeCtx());
 /* 새로 받은 뱃지를 쾅 하고 보여준다 (여러 개면 차례로) */
 function awardBadges() { return new Promise(res => { const fresh = window.Badges.award(badgeList()); if (!fresh.length) return res(false);
@@ -677,6 +679,7 @@ function openDetail(id) {
   el.innerHTML = `<div class="hero" id="dHero" role="button" tabindex="0" aria-label="사진 크게 보기">${hero ? `<img src="${hero.url}" alt="${p.name}">` : md && md.img ? `<img src="${md.img}" alt="${p.name}">` : ICON[p.cat].replace('<svg ', '<svg class="big" ').replace('stroke-width="1.8"', 'stroke-width="1.2"')}<button class="back" type="button" aria-label="뒤로"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button><span class="credit">${hero ? (hero.mem ? '내 추억 사진' : isMine(hero) ? '내 사진' : `사진 · ${esc(hero.nickname)} · 👍 ${hero.likes}`) : md && md.img ? `사진 · ${md.credit ? md.credit.slice(0, 24) + ' · ' : ''}${md.lic || ''} · 위키미디어` : '대표사진 없음 · 첫 사진을 올려 보세요'}</span>${nPh > 1 ? `<span class="cnt">${nPh}장</span>` : ''}</div>
   <div class="body">
     <h2>${p.name}</h2>
+    ${p.by ? `<p class="foundby">🧭 <b>${esc(p.by)}</b>님이 발견한 곳</p>` : ''}
     <div class="meta"><span>${p.sido} ${p.gu}</span>${(p.sets || []).map(id => `<span class="set">${setName(id)}</span>`).join('')}<span>${CATS[p.cat].emoji} ${CATS[p.cat].name}</span>${p.alt ? `<span>해발 ${p.alt.toLocaleString()}m</span>` : ''}${d !== null ? `<span>${fmt(d)}</span>` : ''}<button type="button" class="chip sm" id="dMap">지도에서 보기</button></div>
     ${(() => { const sp = mapS.splitDesc(p.desc); return (sp.spot ? `<p class="spot">📍 인증 지점 · ${sp.spot}</p>` : '') + `<p class="desc">${md && md.desc ? md.desc : sp.body}</p>`; })()}${md && md.desc ? `<p class="srcnote">${p.desc.replace(/^\[[^\]]*\]\s*/, '')} · 설명 출처 <a href="${md.page}" target="_blank" rel="noopener">위키백과</a> (CC BY-SA)</p>` : ''}
     <div class="sealrow ${okStamp || today ? '' : 'faraway'}"><button class="sealbtn ${s ? 'stamped' : ''} ${s && window.sealWide(p.name) ? 'wide' : ''}" id="dStamp" type="button" ${!okStamp && !s ? 'disabled' : ''}><span class="ring"><b>${s ? window.sealHtml(p.name, s.last.slice(5).replace('-', '.')) : '도장<br>꾹!'}</b></span></button><div class="visit">${s ? `<button type="button" class="visitbtn" id="dVisit"><b>방문 ${s.count}회</b><span>최근 ${dotDate(s.last)}</span><i>›</i></button>` : `${window.Memory.of(id) ? `<b>사진으로 다녀온 곳</b>이에요 · ${dotDate(window.Memory.of(id).last)}<br>여기 오면 도장도 찍을 수 있어요.` : '아직 도장이 없어요.'}${weak ? '<br>GPS 신호가 약해요. 하늘이 보이는 곳에서 잠시 기다려 주세요.' : old && d <= p.r ? '<br>지도에서 내 위치를 켜면 찍을 수 있어요.' : d !== null && !okStamp ? `<br>여기서 <b>${fmt(d)}</b>` : ''}`}</div></div>
@@ -764,7 +767,7 @@ function renderMe() {
       <details class="prog progme"><summary>지역별 진행 <span>${sidos.length ? sidos.length + '개 시·도' : ''}</span></summary><div class="progbody">${sidos.length ? sidos.map(x => bar(x.sd, x.d, x.n)).join('') : '<p class="note">아직 도장이 없어요.</p>'}</div></details>
       <div class="melist">
         <button type="button" id="meMem"><span>📷 추억 사진 더하기</span><small>${window.Memory.count() ? `사진 ${window.Memory.count()}장 · 명소 ${Object.keys(window.Memory.places()).length}곳` : '지난 여행 사진으로 다녀온 곳을 찾아요'}</small></button>
-        <button type="button" id="meSuggest"><span>💬 문의·제안</span><small>앱에 바라는 점이나 불편한 점을 알려 주세요</small></button>
+        ${LS.get('lm-suggest', []).length || foundByMe().length ? `<button type="button" id="meFound"><span>🧭 내가 제안한 명소</span><small>${foundByMe().length ? `명소가 된 곳 ${foundByMe().length}곳 · ` : ''}확인 중 ${LS.get('lm-suggest', []).filter(x => !L.some(p => p.name === x.name)).length}곳</small></button>` : ''}<button type="button" id="meSuggest"><span>💬 문의·제안</span><small>앱에 바라는 점이나 불편한 점을 알려 주세요</small></button>
         <button type="button" id="meNotify" class="tog" role="switch" aria-checked="false"><span>🔔 알림 받기</span><i class="sw"></i></button>
         ${DEV ? `<button type="button" id="meTest"><span>🧪 테스트 모드</span><small>${cfg.testMode ? '켜짐 · 어디서나 도장' : '꺼짐 · 반경 안에서만'}</small></button>` : ''}
         ${Trips.trash().length ? `<button type="button" id="meTrash"><span>🗑 삭제한 여행 ${Trips.trash().length}</span><small>30일 안에 되살릴 수 있어요</small></button>` : ''}
@@ -784,6 +787,9 @@ function renderMe() {
   const av = $('#meAvatar'); if (av) av.onclick = () => toast('캐릭터는 곧 꾸밀 수 있어요');
   const mm = $('#meMem'); if (mm) mm.onclick = () => memImport({});
   const sg = $('#meSuggest'); if (sg) sg.onclick = () => feedback();
+  const mf = $('#meFound'); if (mf) mf.onclick = () => { const found = foundByMe(), wait = LS.get('lm-suggest', []).filter(x => !L.some(p => p.name === x.name)); const el = document.createElement('div'); el.className = 'login pick';
+    el.innerHTML = `<div class="box"><h2>내가 제안한 명소</h2><div class="picklist">${found.map(p => `<button type="button" class="pk" data-id="${p.id}"><b>${esc(p.name)}</b><small>명소가 됐어요 · 눌러서 보기</small></button>`).join('')}${wait.map(x => `<div class="pk"><b>${esc(x.name)}</b><small>확인 중 · ${dotDate(x.at.slice(0, 10))} 제안</small></div>`).join('')}</div><button class="btn ghost" type="button" id="pkNo">닫기</button></div>`;
+    document.getElementById('app').appendChild(el); el.onclick = e => { if (e.target === el) el.remove(); }; el.querySelector('#pkNo').onclick = () => el.remove(); el.querySelectorAll('[data-id]').forEach(b => b.onclick = () => { el.remove(); openDetail(b.dataset.id); }); };
   const tr = $('#meTrash'); if (tr) tr.onclick = openTrash;
   const bl = $('#meBlocked'); if (bl) bl.onclick = async () => { const ids = [...window.Store.Safety.blocked()]; const el = document.createElement('div'); el.className = 'login pick'; el.innerHTML = `<div class="box"><h2>차단한 사용자</h2><div class="picklist">${ids.map(id => `<button type="button" class="pk" data-u="${id}"><b>${id}</b><small>눌러서 차단 풀기</small></button>`).join('')}</div><button class="btn ghost" type="button" id="pkNo">닫기</button></div>`; document.getElementById('app').appendChild(el); el.onclick = e => { if (e.target === el) el.remove(); }; el.querySelector('#pkNo').onclick = () => el.remove(); el.querySelectorAll('[data-u]').forEach(b => b.onclick = () => { window.Store.Safety.unblock(b.dataset.u); el.remove(); renderMe(); mapS.refresh(); toast('차단을 풀었어요'); }); };
   const wp = $('#wipe'); if (wp) wp.onclick = async () => { if (!(await ask({ title: '계정과 기록을 모두 지울까요?', text: '도장·여행·사진·가이드·뱃지가 모두 지워져요. 되돌릴 수 없어요.', yes: '모두 삭제', no: '취소' }))) return; if (!(await ask({ title: '정말 지울까요?', text: '마지막 확인이에요.', yes: '네, 지워요', no: '아니오' }))) return; try { await window.Store.wipeAll(); } catch (e) { toast(e.message || '삭제하지 못했어요'); return; } location.hash = ''; location.reload(); };
@@ -837,21 +843,22 @@ async function suggestPlace(draft) {
   const d = SG.draft = draft || SG.draft || { name: '', desc: '', pos: null, photo: null };
   const me = mapS.pos(); if (!d.pos && me) d.pos = { lat: me.lat, lng: me.lng, from: 'me' };
   const el = document.createElement('div'); el.className = 'login';
-  el.innerHTML = `<div class="box"><h2>좋은 명소를 추천해 주세요</h2><p>확인하고 지도에 넣을게요.</p>
+  el.innerHTML = `<div class="box"><h2>좋은 명소를 추천해 주세요</h2><p>확인하고 지도에 넣을게요.<br><b>통과되면 이 명소의 첫 도장과 '발견한 사람' 이름을 드려요.</b></p>
     <input type="text" id="sgName" maxlength="40" placeholder="명소 이름 *" value="${d.name.replace(/"/g, '&quot;')}">
     <textarea id="sgDesc" rows="3" maxlength="300" placeholder="어떤 곳인가요? *">${esc(d.desc)}</textarea>
     <div class="sgpos"><span>${d.pos ? `📍 ${d.pos.from === 'map' ? '지도에서 정한 위치' : '지금 내 위치'}` : '📍 위치를 정해 주세요 *'}</span><button type="button" class="chip" id="sgMap">지도에서 찍기</button></div>
     <div class="sgphoto">${d.photo ? `<img src="${d.photo}" alt=""><button type="button" class="chip" id="sgPhX">사진 빼기</button>` : `<label class="chip filebtn">📷 사진 넣기 (선택)<input type="file" accept="image/*" id="sgFile" hidden></label>`}</div>
+    <label class="fixpos"><input type="checkbox" id="sgShow" ${d.showName === false ? '' : 'checked'}> 통과되면 명소에 내 이름(닉네임) 표시하기</label>
     <div class="askrow"><button class="btn ghost" type="button" id="sgNo">취소</button><button class="btn primary" type="button" id="sgGo">보내기</button></div></div>`;
   document.getElementById('app').appendChild(el);
-  const readD = () => { d.name = el.querySelector('#sgName').value.trim(); d.desc = el.querySelector('#sgDesc').value.trim(); };
+  const readD = () => { d.name = el.querySelector('#sgName').value.trim(); d.desc = el.querySelector('#sgDesc').value.trim(); d.showName = el.querySelector('#sgShow').checked; };
   el.onclick = e => { if (e.target === el) { readD(); el.remove(); } }; el.querySelector('#sgNo').onclick = () => { SG.draft = null; el.remove(); };
   el.querySelector('#sgMap').onclick = async () => { readD(); el.remove(); showTab('map'); const pos = await mapS.pickLocation(d.pos); if (pos) d.pos = { ...pos, from: 'map' }; suggestPlace(d); };
   const f = el.querySelector('#sgFile'); if (f) f.onchange = async e => { const file = e.target.files[0]; if (!file) return; readD(); try { d.photo = await shrink(file, 1200); } catch (err) { toast('사진을 불러오지 못했어요'); } el.remove(); suggestPlace(d); };
   const px = el.querySelector('#sgPhX'); if (px) px.onclick = () => { readD(); d.photo = null; el.remove(); suggestPlace(d); };
   el.querySelector('#sgGo').onclick = () => { readD();
     if (!d.name) { el.querySelector('#sgName').focus(); toast('이름을 적어 주세요'); return; } if (!d.desc) { el.querySelector('#sgDesc').focus(); toast('설명을 적어 주세요'); return; } if (!d.pos) { toast('위치를 찍어 주세요'); return; }
-    const list = LS.get('lm-suggest', []); list.push({ name: d.name, desc: d.desc, pos: { lat: d.pos.lat, lng: d.pos.lng }, hasPhoto: !!d.photo, at: new Date().toISOString() }); LS.set('lm-suggest', list);
+    const list = LS.get('lm-suggest', []); list.push({ name: d.name, desc: d.desc, pos: { lat: d.pos.lat, lng: d.pos.lng }, hasPhoto: !!d.photo, showName: d.showName !== false, by: (store.getUser() || {}).nickname || '', status: 'wait', at: new Date().toISOString() }); LS.set('lm-suggest', list);
     if (d.photo) { try { localStorage.setItem('lm-suggest-photo-' + (list.length - 1), d.photo); } catch (e) {} }
     SG.draft = null; el.remove(); toast(`'${d.name}' 제안을 받았어요. 고마워요!`); awardBadges(); };
 }
