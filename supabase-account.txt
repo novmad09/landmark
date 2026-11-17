@@ -182,3 +182,33 @@ begin
   end if;
   return jsonb_build_object('path', v_path, 'strikes', v_strikes);
 end $$;
+
+-- ───────── 테스트용 더미 계정 (로그인할 수 없는 가짜 계정. 이메일이 dummy-…@test.invalid) ─────────
+create or replace function admin_dummy_add(p_n int default 5, p_places text[] default '{}') returns int language plpgsql security definer set search_path = public as $$
+declare v uuid; prov text; t timestamptz; d date := (now() at time zone 'Asia/Seoul')::date;
+  names text[] := array['산책러','도장왕','여행자','바다좋아','산타는곰','골목탐험','기차여행','한옥덕후','노을수집가','캠핑러','등산초보','성곽걷기'];
+begin
+  if not is_admin() then raise exception 'admin only'; end if;
+  p_n := least(greatest(coalesce(p_n, 5), 1), 50);
+  for i in 1..p_n loop
+    v := gen_random_uuid(); prov := (array['google','kakao','apple'])[1 + floor(random() * 3)::int]; t := now() - random() * interval '30 days';
+    insert into auth.users (id, instance_id, aud, role, email, raw_app_meta_data, raw_user_meta_data, created_at, updated_at, last_sign_in_at)
+      values (v, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'dummy-' || substr(v::text, 1, 8) || '@test.invalid',
+        jsonb_build_object('provider', prov, 'providers', jsonb_build_array(prov)), jsonb_build_object('name', names[1 + floor(random() * 12)::int] || (10 + floor(random() * 90)::int), 'sub', 'dummy-' || v), t, now(), t + random() * (now() - t));
+    update profiles set created_at = t where id = v;
+    insert into stamps (user_id, place_id, day, kind) select v, x.p, d - floor(random() * 20)::int, case when random() < 0.8 then 'gps' else 'photo' end
+      from (select p from unnest(p_places) p order by random() limit floor(random() * 12)::int) x on conflict do nothing;
+    insert into visits (day, device, user_id, app_version) select d - g, 'dummy-' || substr(v::text, 1, 12), v, '0.55' from generate_series(0, 13) g where random() < 0.4 on conflict do nothing;
+  end loop;
+  return p_n;
+end $$;
+create or replace function admin_dummy_clear() returns int language plpgsql security definer set search_path = public as $$
+declare n int;
+begin
+  if not is_admin() then raise exception 'admin only'; end if;
+  delete from admin_log where user_id in (select id from auth.users where email like 'dummy-%@test.invalid');
+  delete from visits where device like 'dummy-%';
+  delete from auth.users where email like 'dummy-%@test.invalid'; get diagnostics n = row_count;
+  return n;
+end $$;
+grant execute on function admin_dummy_add(int, text[]), admin_dummy_clear() to authenticated;
