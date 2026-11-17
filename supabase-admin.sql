@@ -68,3 +68,34 @@ begin
   return jsonb_build_object('path', v_path, 'strikes', v_strikes);
 end $$;
 grant execute on function admin_resolve(text, text, boolean) to authenticated;
+
+-- 사용자 목록 (이메일·활동 수·정지 상태). 관리자만.
+create or replace function admin_users() returns jsonb language plpgsql security definer set search_path = public as $$
+declare r jsonb;
+begin
+  if not is_admin() then raise exception 'admin only'; end if;
+  select coalesce(jsonb_agg(to_jsonb(x) order by x.created_at desc), '[]'::jsonb) into r from (
+    select p.id, p.nickname, u.email, p.strikes, p.created_at,
+      case when p.banned_until = 'infinity' then 'forever' when p.banned_until > now() then to_char(p.banned_until at time zone 'Asia/Seoul', 'YYYY-MM-DD HH24:MI') end as ban,
+      (select max(v.day) from visits v where v.user_id = p.id) as last_day,
+      (select count(*) from stamps s where s.user_id = p.id) as stamps,
+      (select count(*) from photos ph where ph.user_id = p.id) as photos,
+      (select count(*) from guides g where g.user_id = p.id) as guides,
+      exists (select 1 from admins a where a.user_id = p.id) as admin
+    from profiles p left join auth.users u on u.id = p.id order by p.created_at desc limit 1000) x;
+  return r;
+end $$;
+grant execute on function admin_users() to authenticated;
+
+-- 정지·해제·경고 지우기. p_days: null=그대로, 0=해제, 음수=영구, 양수=그 날수만큼
+create or replace function admin_ban(p_id uuid, p_days int default null, p_reset boolean default false) returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not is_admin() then raise exception 'admin only'; end if;
+  update profiles set banned_until = case when p_days is null then banned_until when p_days = 0 then null when p_days < 0 then 'infinity'::timestamptz else now() + make_interval(days => p_days) end,
+    strikes = case when p_reset then 0 else strikes end where id = p_id;
+end $$;
+grant execute on function admin_ban(uuid, int, boolean) to authenticated;
+
+-- 사용자가 자기 경고·정지를 스스로 고치지 못하게: 닉네임만 바꿀 수 있다
+revoke update on profiles from anon, authenticated;
+grant update (nickname) on profiles to authenticated;
