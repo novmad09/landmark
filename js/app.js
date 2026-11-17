@@ -716,6 +716,8 @@ function routePick(p) { const me = mapS.pos(), nm = encodeURIComponent(p.name.re
 document.addEventListener('click', e => { const a = e.target.closest('a[data-route]'); if (!a) return; const p = byId(a.dataset.route); if (!p) return; e.preventDefault(); routePick(p); });
 function pickPhoto(id) {
   (async () => { if (!(await requireLogin())) return; const p = byId(id);
+    { const u = store.getUser(), t = kstToday(); /* 고르기 전에 먼저 알려 준다: 한 명소에 하루 한 장 */
+      if (u && store.photosOf(id).some(x => x.userId === u.id && window.Store.kstDate(x.createdAt) === t)) { toast('이 명소에는 오늘 이미 사진을 올렸어요. 내일 또 올려 주세요'); return; } }
     const dataUrl = await window.PhotoEditor.run({ place: p, maxEdge: cfg.photoMaxEdge, date: kstToday().replaceAll('-', '.'), toast }); if (!dataUrl) { await awardBadges(); await askNotify(); return; }
     toast('올리는 중…'); let r; try { r = await store.addPhoto(id, dataUrl, mapS.pos()); } catch (e) { toast('저장 공간이 부족하거나 사진을 저장할 수 없어요'); return; } if (!r.ok) { toast(r.reason); return; } toast('사진을 올렸어요'); openDetail(id); mapS.refresh(); await awardBadges(); })();
 }
