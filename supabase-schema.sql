@@ -133,6 +133,14 @@ do $$ declare r record; begin
   for r in select policyname, tablename from pg_policies where schemaname = 'public' loop execute format('drop policy if exists %I on %I', r.policyname, r.tablename); end loop;
 end $$;
 
+-- 올리기 정지 중인지 (정책 안에서 쓴다. 경고·정지 칸은 남이 못 보게 막아 두었으므로 함수로 확인한다)
+create or replace function is_banned() returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from profiles where id = auth.uid() and banned_until > now()) $$;
+grant execute on function is_banned() to anon, authenticated;
+-- 남들이 볼 수 있는 것은 닉네임뿐. 고칠 수 있는 것도 자기 닉네임뿐 (경고·정지는 운영자 함수로만)
+revoke select, update on profiles from anon, authenticated;
+grant select (id, nickname, created_at) on profiles to anon, authenticated;
+grant update (nickname) on profiles to authenticated;
 create policy "profiles read" on profiles for select using (true);
 create policy "profiles update own" on profiles for update using (auth.uid() = id) with check (auth.uid() = id);
 
@@ -143,14 +151,14 @@ create policy "stamps delete own" on stamps for delete using (auth.uid() = user_
 create policy "photos read" on photos for select using (not hidden or auth.uid() = user_id);
 create policy "photos insert own" on photos for insert with check (
   auth.uid() = user_id and like_count = 0 and report_count = 0 and not hidden
-  and not exists (select 1 from profiles p where p.id = auth.uid() and p.banned_until > now()));
+  and not is_banned());
 create policy "photos delete own" on photos for delete using (auth.uid() = user_id);
 create policy "photo_likes read own" on photo_likes for select using (auth.uid() = user_id);
 
 create policy "guides read" on guides for select using (not hidden or auth.uid() = user_id);
 create policy "guides insert own" on guides for insert with check (
   auth.uid() = user_id and like_count = 0 and completions = 0 and report_count = 0 and not hidden
-  and not exists (select 1 from profiles p where p.id = auth.uid() and p.banned_until > now()));
+  and not is_banned());
 create policy "guides delete own" on guides for delete using (auth.uid() = user_id);
 create policy "guide_likes read own" on guide_likes for select using (auth.uid() = user_id);
 
