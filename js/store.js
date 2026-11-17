@@ -54,6 +54,7 @@ const Safety = {
 };
 /* 계정·기록 전부 삭제 (앱스토어 5.1.1 / 플레이 계정 삭제 정책) */
 async function wipeAll() {
+  if (window.Cloud && window.Cloud.signedIn()) await window.Cloud.deleteAccount(); /* 서버부터. 실패하면 아무것도 안 지운다 */
   if (remote.sb && remote.session) { const { error } = await remote.sb.rpc('delete_my_account'); if (error) throw new Error('서버 기록을 지우지 못했어요. 인터넷을 확인하고 다시 시도해 주세요'); await remote.sb.auth.signOut().catch(() => {}); } /* 서버부터, 실패하면 아무것도 안 지운다 */
   try { Object.keys(localStorage).filter(k => k.startsWith('lm-')).forEach(k => localStorage.removeItem(k)); } catch (e) {}
   try { if (window.Memory) await window.Memory.wipe(); } catch (e) {}
@@ -78,13 +79,13 @@ const local = {
     const t = kstToday(), s = this.stamps[placeId] || { count: 0, first: t, last: null };
     if (s.last === t) return { ok: false, reason: '오늘 이미 찍었어요', already: true };
     s.count++; s.last = t; const kh = new Date(Date.now() + 9 * 3600e3).getUTCHours(); if (kh >= 5 && kh < 7) { s.dawn = true; s.dawnDays = [...new Set([...(s.dawnDays || []), t])]; } s.days = [...new Set([...(s.days || []), t])]; s.months = [...new Set([...(s.months || []), +t.slice(5, 7)])]; // 뱃지용 기록
-    this.stamps[placeId] = s; LS.set('lm-stamps', this.stamps);
+    this.stamps[placeId] = s; LS.set('lm-stamps', this.stamps); if (window.Cloud) window.Cloud.stamped();
     return { ok: true, visitNo: s.count, stamp: s };
   },
   /* 오늘 찍은 도장 취소 (실수로 찍었을 때) */
   async unstamp(placeId) { const s = this.stamps[placeId]; if (!s) return { ok: false, reason: '취소할 도장이 없어요' }; const t = s.last; /* 가장 최근 방문 하나를 지운다 */
     s.count = Math.max(0, s.count - 1); s.days = (s.days || [s.first, s.last]).filter(d => d && d !== t); if (!s.count || !s.days.length) delete this.stamps[placeId]; else { if (s.dawnDays) { s.dawnDays = s.dawnDays.filter(d => d !== t); s.dawn = s.dawnDays.length > 0; } /* 새벽 도장을 취소하면 해돋이 기록도 뺀다 */ s.last = s.days.slice().sort().at(-1); s.months = [...new Set(s.days.map(d => +d.slice(5, 7)))]; }
-    LS.set('lm-stamps', this.stamps); return { ok: true }; },
+    LS.set('lm-stamps', this.stamps); if (window.Cloud) window.Cloud.unstamped(placeId, t); return { ok: true }; },
   photosOf(placeId) { const bl = Safety.blocked(); return this.photos.filter(x => x.placeId === placeId && !bl.has(x.userId)).sort((a, b) => b.likes - a.likes || b.createdAt.localeCompare(a.createdAt)); },
   coverOf(placeId) { const ph = this.photosOf(placeId)[0]; return ph && ph.likes >= 0 ? ph : null; },
   async addPhoto(placeId, dataUrl, pos) {

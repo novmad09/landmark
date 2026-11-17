@@ -20,7 +20,7 @@ function ask({ title, text, yes, no, input, value }) { return new Promise(res =>
 
 const DEV = cfg.testMode; /* 출시판(testMode:false)에서는 테스트 모드를 켤 수 없다 */
 if (DEV && localStorage.getItem('lm-test') !== null) cfg.testMode = LS.get('lm-test', cfg.testMode); // 내 정보에서 켜고 끈 값
-const store = await window.Store.create(); window.Store.TripPhotos.gc().catch(() => {}); try { await window.Memory.init(); } catch (e) {}
+const store = await window.Store.create(); window.Cloud.init(store); window.Store.TripPhotos.gc().catch(() => {}); try { await window.Memory.init(); } catch (e) {}
 const mapS = window.MapScreen.init({ store, toast, onStamp: startStamp, onDetail: openDetail, onAddTrip: p => addToTrip(p), onPhoto: p => photoOrMemory(p.id), onUndo: () => { if (!screens.dogam.hidden) renderDogam(); }, onStampInfo: p => stampInfo(p), onMemPhotos: ids => { const all = window.Memory.all(); const ms = ids.map(i => all.find(m => m.id === i)).filter(Boolean).sort((a, b) => a.at - b.at); openPhotos(ms.map(m => window.Memory.item(m)), 0, '추억 사진'); }, onGallery: p => openGallery(p.id, 0),
   onNear: p => { try { navigator.vibrate && navigator.vibrate([60, 40, 60]); } catch (e) {} toast(`${p.name} 도장을 찍을 수 있어요`, { action: '찍기', onAction: () => { showTab('map'); mapS.focus(p.id); } });
     if (document.hidden && 'Notification' in window && Notification.permission === 'granted') { try { new Notification('랜드마크', { body: `${p.name} 근처예요. 도장을 찍어 보세요`, tag: 'near' }); } catch (e) {} } } });
@@ -241,7 +241,9 @@ function scopeSummary(stamps) {
   return `방문 <b>${v}</b> / ${label} ${inScope.length}곳`;
 }
 /* 현장 도장 + 추억 도장(사진)을 합친 보기. 현장 도장이 있으면 그쪽이 우선 */
-function allSeen() { const out = {}, st = store.allStamps(); Object.entries(window.Memory.places()).forEach(([id, m]) => { out[id] = { ...m, count: Math.max(1, m.days.length), mem: true }; }); /* 사진 장수가 아니라 간 날 수 */
+function allSeen() { const out = {}, st = store.allStamps(); /* 다른 폰에서 사진으로 다녀온 곳(서버에서 내려받은 기록)도 다녀온 곳이다 */
+  Object.entries(LS.get('lm-pstamps', {})).forEach(([id, m]) => { if (m.days && m.days.length) out[id] = { count: m.days.length, first: m.first, last: m.last, days: m.days, mem: true }; });
+  Object.entries(window.Memory.places()).forEach(([id, m]) => { const o = out[id]; const days = o ? [...new Set([...o.days, ...m.days])].sort() : m.days; out[id] = { ...m, days, first: days[0] || m.first, last: days[days.length - 1] || m.last, count: Math.max(1, days.length), mem: true }; }); /* 사진 장수가 아니라 간 날 수 */
   Object.entries(st).forEach(([id, s]) => { const m = out[id]; out[id] = m && m.days.length ? { ...s, days: [...new Set([...(s.days && s.days.length ? s.days : [s.first, s.last]), ...m.days])].filter(Boolean) } : s; }); return out; } /* 도장 찍은 곳도 예전 사진 날짜의 여행은 남긴다 */
 function renderDogam() {
   Nudge.absorb(); Nudge.promote(); const stamps = allSeen();
@@ -767,7 +769,7 @@ function renderMe() {
       <div class="jump2 four"><button type="button" id="meTrips"><b>${tripN}</b><span>여행</span></button><button type="button" id="mePlans"><b>${planN}</b><span>계획</span></button><button type="button" id="meGuides"><b>${guideN}</b><span>가이드</span></button><button type="button" id="meBadges"><b>${got}</b><span>뱃지</span></button></div>
       ${recent.length ? `<button type="button" class="recentb" id="meBadges2"><span class="rb-list">${recent.map(b => window.Badges.svg(b, 44)).join('')}</span><span class="rb-t">뱃지 ${got}/${badges.length} 보기 ›</span></button>` : `<button type="button" class="recentb" id="meBadges2"><span class="rb-t">아직 받은 뱃지가 없어요 · 뱃지 ${badges.length}개 보기 ›</span></button>`}
       <details class="prog progme"><summary>지역별 진행 <span>${sidos.length ? sidos.length + '개 시·도' : ''}</span></summary><div class="progbody">${sidos.length ? sidos.map(x => bar(x.sd, x.d, x.n)).join('') : '<p class="note">아직 도장이 없어요.</p>'}</div></details>
-      <div class="melist">
+      <div class="melist">${window.Cloud.ready ? `<button type="button" class="meCloud"><span>☁️ ${window.Cloud.signedIn() ? '구글 계정 연결됨' : '구글로 로그인'}</span><small>${window.Cloud.signedIn() ? `${esc(window.Cloud.email())} · 기록이 서버에 보관돼요` : '기록을 서버에 보관해요. 폰을 바꿔도 남아요'}</small></button>` : ''}
         <button type="button" id="meMem"><span>📷 추억 사진 더하기</span><small>${window.Memory.count() ? `사진 ${window.Memory.count()}장 · 명소 ${Object.keys(window.Memory.places()).length}곳` : '지난 여행 사진으로 다녀온 곳을 찾아요'}</small></button>
         ${LS.get('lm-suggest', []).length || foundByMe().length ? `<button type="button" id="meFound"><span>🧭 내가 제안한 명소</span><small>${foundByMe().length ? `명소가 된 곳 ${foundByMe().length}곳 · ` : ''}확인 중 ${LS.get('lm-suggest', []).filter(x => !L.some(p => p.name === x.name)).length}곳</small></button>` : ''}<button type="button" id="meSuggest"><span>💬 문의·제안</span><small>앱에 바라는 점이나 불편한 점을 알려 주세요</small></button>
         <button type="button" id="meNotify" class="tog" role="switch" aria-checked="false"><span>🔔 알림 받기</span><i class="sw"></i></button>
@@ -777,7 +779,7 @@ function renderMe() {
       </div>
       <div class="legal"><a href="legal/terms.html" target="_blank" rel="noopener">이용약관</a> · <a href="legal/privacy.html" target="_blank" rel="noopener">개인정보처리방침</a> · <a href="legal/delete.html" target="_blank" rel="noopener">삭제 안내</a><span class="ver">v${cfg.version || '0'}${cfg.testMode ? ' · 테스트' : ''}</span></div>
       <div class="row2"><button class="btn ghost" id="out" type="button">${store.mode === 'local' ? '이름 바꾸기' : '로그아웃'}</button><button class="btn ghost danger" id="wipe" type="button">계정·기록 삭제</button></div>${credit}`
-    : `<h2>${store.mode === 'local' ? '반가워요!' : '로그인해 주세요'}</h2><p class="note">${store.mode === 'local' ? '이름은 첫 도장을 찍을 때 자동으로 생겨요. 지금 정해도 돼요.' : '도장을 찍으려면 로그인이 필요해요.'}</p><button class="btn primary" id="in" type="button">${store.mode === 'local' ? '이름 정하기' : '로그인'}</button><button type="button" class="recentb" id="meBadges2"><span class="rb-t">뱃지 ${badges.length}개 보기 ›</span></button><div class="melist"><button type="button" id="meMem"><span>📷 추억 사진 더하기</span><small>${window.Memory.count() ? `사진 ${window.Memory.count()}장 · 명소 ${Object.keys(window.Memory.places()).length}곳` : '지난 여행 사진으로 다녀온 곳을 찾아요'}</small></button></div>${window.Memory.count() ? '<button class="btn ghost danger small" id="wipe" type="button">기록 모두 삭제</button>' : ''}<div class="legal"><a href="legal/terms.html" target="_blank" rel="noopener">이용약관</a> · <a href="legal/privacy.html" target="_blank" rel="noopener">개인정보처리방침</a></div>${credit}`;
+    : `<h2>${store.mode === 'local' ? '반가워요!' : '로그인해 주세요'}</h2><p class="note">${store.mode === 'local' ? '이름은 첫 도장을 찍을 때 자동으로 생겨요. 지금 정해도 돼요.' : '도장을 찍으려면 로그인이 필요해요.'}</p><button class="btn primary" id="in" type="button">${store.mode === 'local' ? '이름 정하기' : '로그인'}</button><button type="button" class="recentb" id="meBadges2"><span class="rb-t">뱃지 ${badges.length}개 보기 ›</span></button><div class="melist">${window.Cloud.ready ? `<button type="button" class="meCloud"><span>☁️ ${window.Cloud.signedIn() ? '구글 계정 연결됨' : '구글로 로그인'}</span><small>${window.Cloud.signedIn() ? `${esc(window.Cloud.email())} · 기록이 서버에 보관돼요` : '기록을 서버에 보관해요. 폰을 바꿔도 남아요'}</small></button>` : ''}<button type="button" id="meMem"><span>📷 추억 사진 더하기</span><small>${window.Memory.count() ? `사진 ${window.Memory.count()}장 · 명소 ${Object.keys(window.Memory.places()).length}곳` : '지난 여행 사진으로 다녀온 곳을 찾아요'}</small></button></div>${window.Memory.count() ? '<button class="btn ghost danger small" id="wipe" type="button">기록 모두 삭제</button>' : ''}<div class="legal"><a href="legal/terms.html" target="_blank" rel="noopener">이용약관</a> · <a href="legal/privacy.html" target="_blank" rel="noopener">개인정보처리방침</a></div>${credit}`;
   const out = $('#out'); if (out) out.onclick = async () => { if (store.mode === 'local') { const u = store.getUser(); const n = await ask({ title: '이름 바꾸기', input: '새 이름', value: u ? u.nickname : '', yes: '바꾸기', no: '취소' }); if (!n) return; const c = window.Store.Safety.clean(n.trim().slice(0, 14)); if (!c) { toast('쓸 수 없는 이름이에요'); return; } LS.set('lm-user', { ...u, nickname: c }); store.user = { ...u, nickname: c }; renderMe(); toast('이름을 바꿨어요'); return; } await store.signOut(); renderMe(); mapS.refresh(); toast('로그아웃했어요'); };
   const inb = $('#in'); if (inb) inb.onclick = async () => { await requireLogin(); renderMe(); };
   document.querySelectorAll('[data-restore]').forEach(b => b.onclick = () => { const t = Trips.restore(b.dataset.restore); renderMe(); if (t) toast(`'${t.name}'${josa(t.name, '을/를')} 되살렸어요`); });
@@ -788,6 +790,9 @@ function renderMe() {
   const mb = $('#meBio'); if (mb) mb.onclick = async () => { const n = await ask({ title: '내 목표', input: '예: 올해 100대 명산 10곳', value: bio, yes: '저장', no: '취소' }); if (n !== null && n !== false) { LS.set('lm-bio', n); renderMe(); } };
   const av = $('#meAvatar'); if (av) av.onclick = () => toast('캐릭터는 곧 꾸밀 수 있어요');
   const mm = $('#meMem'); if (mm) mm.onclick = () => memImport({});
+  screens.me.querySelectorAll('.meCloud').forEach(b => b.onclick = async () => {
+    if (!window.Cloud.signedIn()) { toast('구글 로그인 화면으로 이동해요'); try { const { error } = await window.Cloud.signIn(); if (error) toast('로그인을 시작하지 못했어요'); } catch (e) { toast('로그인을 시작하지 못했어요'); } return; }
+    if (await ask({ title: '로그아웃할까요?', text: '이 폰의 기록은 그대로 남아요. 다시 로그인하면 서버 기록과 합쳐져요.', yes: '로그아웃', no: '취소' })) { await window.Cloud.signOut(); toast('로그아웃했어요'); } });
   const sg = $('#meSuggest'); if (sg) sg.onclick = () => feedback();
   const mf = $('#meFound'); if (mf) mf.onclick = () => { const found = foundByMe(), wait = LS.get('lm-suggest', []).filter(x => !L.some(p => p.name === x.name)); const el = document.createElement('div'); el.className = 'login pick';
     el.innerHTML = `<div class="box"><h2>내가 제안한 명소</h2><div class="picklist">${found.map(p => `<button type="button" class="pk" data-id="${p.id}"><b>${esc(p.name)}</b><small>명소가 됐어요 · 눌러서 보기</small></button>`).join('')}${wait.map(x => `<div class="pk"><b>${esc(x.name)}</b><small>확인 중 · ${dotDate(x.at.slice(0, 10))} 제안</small></div>`).join('')}</div><button class="btn ghost" type="button" id="pkNo">닫기</button></div>`;
@@ -901,4 +906,7 @@ function onboarding() {
 }
 onboarding();
 if ('serviceWorker' in navigator && location.protocol === 'https:' && !isNative) navigator.serviceWorker.register('sw.js').catch(() => {}); /* 네이티브는 파일이 앱 안에 있어서 캐시가 필요 없다 */
+/* 서버 연결: 로그인 상태가 바뀌거나 서버 기록이 합쳐지면 화면을 새로 그린다 */
+document.addEventListener('cloud-auth', () => { if (!screens.me.hidden) renderMe(); if (window.Cloud.signedIn()) toast('로그인했어요. 기록을 서버와 맞추는 중이에요'); });
+document.addEventListener('cloud-sync', () => { mapS.refresh(); if (!screens.dogam.hidden) renderDogam(); if (!screens.me.hidden) renderMe(); toast('서버에 있던 기록을 불러왔어요'); });
 })();

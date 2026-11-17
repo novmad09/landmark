@@ -69,8 +69,9 @@ function nearCheck() { if (!S.me || !onNear) return; const now = Date.now(); con
   if (hit) { nearSeen[hit.id] = now; onNear(hit); } }
 const mode = () => { if (S.trip || S.filter.seen === 'yes') return 'near'; /* 다녀온 곳만 볼 땐 지역 묶음(서울·경기…) 없이 핀을 바로 보여 준다 */ const z = map.getZoom(); return z < 7.6 ? 'nat' : z < 11.2 ? 'city' : 'near'; };
 const P = (lng, lat) => { const p = map.project([lng, lat]); return [p.x, p.y]; };
-const visited = id => !!store.stampsOf(id) || !!(window.Memory && window.Memory.of(id)); /* 현장 도장이든 사진이든 다녀온 곳은 똑같이 다룬다 */
-const stampOf = id => store.stampsOf(id) || (m => m ? { count: Math.max(1, m.days.length), first: m.first, last: m.last } : null)(window.Memory && window.Memory.of(id));
+const pst = id => { try { const m = (JSON.parse(localStorage.getItem('lm-pstamps') || '{}') || {})[id]; return m && m.days && m.days.length ? m : null; } catch (e) { return null; } }; /* 서버에서 내려받은 '사진으로 다녀온 곳' */
+const visited = id => !!store.stampsOf(id) || !!(window.Memory && window.Memory.of(id)) || !!pst(id); /* 현장 도장이든 사진이든 다녀온 곳은 똑같이 다룬다 */
+const stampOf = id => store.stampsOf(id) || (m => m ? { count: Math.max(1, m.days.length), first: m.first, last: m.last } : null)(window.Memory && window.Memory.of(id)) || (m => m ? { count: m.days.length, first: m.first, last: m.last } : null)(pst(id));
 const remembered = id => !!(window.Memory && window.Memory.of(id)); /* 사진으로 찾은 추억 도장 */
 const been = id => visited(id) || remembered(id);
 const inRange = p => S.me && dist(S.me, p) - Math.min(S.me.accuracy || 0, cfg.maxAccuracy) <= p.r;
