@@ -817,3 +817,10 @@ p.spot{margin:0 16px 2px}
 
 .foundby{margin:2px 0 6px;font-size:14px;color:var(--ink-soft)}.foundby b{color:var(--ink)}
 div.pk{display:flex;flex-direction:column;gap:2px;padding:12px 14px;border-radius:12px;background:var(--bg);text-align:left}div.pk small{color:var(--ink-soft);font-size:13px}
+
+/* 이용 정지 화면 */
+.blockscr{position:fixed;inset:0;z-index:99;background:var(--bg);display:grid;place-items:center;padding:24px;text-align:center}
+.blockscr>div{max-width:340px;display:flex;flex-direction:column;gap:12px;align-items:stretch}
+.blockscr h2{margin:0;font-size:24px}.blockscr p{margin:0;font-size:16px}.blockscr .note{font-size:14px;color:var(--ink-soft)}
+.blockscr .bseal{width:84px;height:84px;margin:0 auto 6px;border-radius:50%;border:4px solid #C8372D;color:#C8372D;display:grid;place-items:center;font-weight:900;font-size:24px;transform:rotate(-8deg)}
+.blockscr a.btn{text-decoration:none;display:flex;align-items:center;justify-content:center}

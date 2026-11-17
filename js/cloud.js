@@ -43,7 +43,12 @@
         s.days.push(d); s.days.sort(); s.count = Math.max((s.count || 0) + 1, s.days.length); s.first = s.days[0]; s.last = s.days[s.days.length - 1]; s.months = [...new Set(s.days.map(x => +x.slice(5, 7)))]; changed = true; }
       else { if (mem[r.place_id] && (mem[r.place_id].days || []).includes(d)) return; const m = ps[r.place_id] || (ps[r.place_id] = { days: [] }); if (m.days.includes(d)) return; m.days.push(d); m.days.sort(); m.first = m.days[0]; m.last = m.days[m.days.length - 1]; m.count = m.days.length; changed = true; } });
     if (changed) { set('lm-stamps', st); set('lm-pstamps', ps); } return changed; }
-  async function sync() { if (!sb || !uid() || syncing) return false; syncing = true; let changed = false; try {
+  /* 계정 상태: 이용 정지됐는지, 탈퇴 처리 중인지. 둘 중 하나면 서버와 맞추지 않는다 */
+  let status = null, statusAt = 0;
+  async function checkStatus() { if (!sb || !uid()) { status = null; return null; } try { const { data, error } = await sb.rpc('my_status'); if (!error) { status = data || {}; statusAt = Date.now(); document.dispatchEvent(new CustomEvent('cloud-status', { detail: status })); } } catch (e) {} return status; }
+  const held = () => !!(status && (status.blocked || status.deleting));
+  async function go() { if (!uid()) return; await checkStatus(); if (held()) return; await sync(); await pushMine(); }
+  async function sync() { if (!sb || !uid() || syncing || held()) return false; syncing = true; let changed = false; try {
     /* 1) 밀린 취소부터 보낸다 2) 폰 → 서버 3) 서버 → 폰 */
     let ops = q(); while (ops.length) { const op = ops[0]; if (op.op === 'del') { const { error } = await sb.from('stamps').delete().eq('user_id', uid()).eq('place_id', op.place_id).eq('day', op.day).eq('kind', 'gps'); if (error) throw error; } ops = q().slice(1); set('lm-syncq', ops); }
     const rows = localRows(); for (let i = 0; i < rows.length; i += 400) { const { error } = await sb.from('stamps').upsert(rows.slice(i, i + 400), { onConflict: 'user_id,place_id,day,kind', ignoreDuplicates: true }); if (error) throw error; }
@@ -105,9 +110,9 @@
   async function ping() { if (!sb || !navigator.onLine) return; const day = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10), key = day + (uid() ? '+' : '');
     if (get('lm-ping', '') === key) return; try { const { error } = await sb.rpc('ping', { p_device: device(), p_version: String(cfg.version || '') }); if (!error) set('lm-ping', key); } catch (e) {} }
   async function init(store) { storeRef = store; if (!sb) return; try { const { data } = await sb.auth.getSession(); session = data.session || null; } catch (e) {}
-    sb.auth.onAuthStateChange((ev, s) => { const was = uid(); session = s; if (uid() !== was) { document.dispatchEvent(new CustomEvent('cloud-auth')); ping(); if (uid()) sync().then(pushMine); else pull(); } });
-    ping(); addEventListener('visibilitychange', () => { if (!document.hidden) ping(); });
-    pull().then(() => { if (uid()) sync().then(pushMine); }); addEventListener('online', () => { sync().then(pushMine); }); }
+    sb.auth.onAuthStateChange((ev, s) => { const was = uid(); session = s; if (uid() !== was) { document.dispatchEvent(new CustomEvent('cloud-auth')); ping(); if (uid()) go(); else { status = null; pull(); } } });
+    ping(); addEventListener('visibilitychange', () => { if (document.hidden) return; ping(); if (uid() && Date.now() - statusAt > 10 * 60000) checkStatus(); });
+    pull().then(go); addEventListener('online', go); }
   const acct = {
     ready: !!sb, signedIn: () => !!uid(), email: () => (session && session.user && session.user.email) || '',
     name: () => { const m = session && session.user && session.user.user_metadata; return (m && (m.name || m.full_name)) || ''; },
@@ -115,9 +120,11 @@
     async signOut() { try { await sb.auth.signOut(); } catch (e) {} session = null; document.dispatchEvent(new CustomEvent('cloud-auth')); },
     /* 도장을 찍거나 취소했을 때 앱이 알려 준다 */
     stamped() { sync(); }, unstamped(place_id, day) { if (!sb) return; qPush({ op: 'del', place_id, day }); sync(); },
-    /* 계정·서버 기록 전부 삭제 */
+    status: () => status, checkStatus,
+    async cancelDelete() { const { error } = await sb.rpc('cancel_delete'); if (error) return false; await go(); return true; },
+    /* 탈퇴: 올린 사진·가이드는 바로 지우고, 계정과 도장 기록은 서버가 7일 보관한 뒤 지운다 */
     async deleteAccount() { if (!uid()) return; try { const { data } = await sb.from('photos').select('path').eq('user_id', uid()).limit(5000); const paths = (data || []).map(x => x.path).filter(Boolean); for (let i = 0; i < paths.length; i += 100) await sb.storage.from('photos').remove(paths.slice(i, i + 100)); } catch (e) {} /* 사진 파일부터 지운다 */
-      const { error } = await sb.rpc('delete_my_account'); if (error) throw new Error('서버 기록을 지우지 못했어요. 인터넷을 확인하고 다시 시도해 주세요'); try { await sb.auth.signOut(); } catch (e) {} session = null; },
+      const { error } = await sb.rpc('request_delete'); if (error) throw new Error('서버 기록을 지우지 못했어요. 인터넷을 확인하고 다시 시도해 주세요'); try { await sb.auth.signOut(); } catch (e) {} session = null; },
   };
   window.Cloud = { on, device, send, flush, pending: () => get('lm-outbox', []).length, init, sync, uid, ...acct, ...content };
   if (on) { setTimeout(flush, 3000); addEventListener('online', flush); }
