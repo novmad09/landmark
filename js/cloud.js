@@ -49,9 +49,56 @@
     { const u = get('lm-user', null); if (u && u.nickname) await sb.from('profiles').update({ nickname: String(u.nickname).slice(0, 20) }).eq('id', uid()); }
   } catch (e) { console.warn('[cloud] sync', e && e.message); } finally { syncing = false; }
     if (changed) document.dispatchEvent(new CustomEvent('cloud-sync')); return changed; }
+  /* ───── 3단계: 명소 사진·가이드 함께 보기 ─────
+     사진·가이드는 폰에 먼저 저장하고, 로그인돼 있으면 서버에도 올린다(로그인 전 것은 로그인할 때 올라간다).
+     다른 사람이 올린 것은 로그인 없이도 볼 수 있다. 추천은 로그인해야 서버에 반영된다. */
+  let rphotos = [], rguides = [], pLikes = new Set(), gLikes = new Set();
+  const mapPhoto = r => ({ id: 'r' + r.id, rid: r.id, remote: true, placeId: r.place_id, userId: r.user_id, nickname: r.nickname || '여행자', url: r.url, likes: r.like_count, createdAt: r.created_at, rpath: r.path });
+  const mapGuide = r => ({ ...(r.data || {}), id: r.id, remote: true, userId: r.user_id, author: r.nickname || '여행자', title: r.title, likes: r.like_count, completions: (r.data && r.data.completions) || r.completions || 0, ratings: (r.data && r.data.ratings) || [], createdAt: r.created_at, mine: r.user_id === uid() });
+  async function pull() { if (!sb) return; try {
+    const [ph, gd] = await Promise.all([
+      sb.from('photos').select('id,place_id,user_id,nickname,url,path,like_count,created_at').order('like_count', { ascending: false }).order('created_at', { ascending: false }).limit(3000),
+      sb.from('guides').select('id,user_id,nickname,title,data,like_count,completions,created_at').order('like_count', { ascending: false }).limit(1000)]);
+    if (!ph.error) rphotos = (ph.data || []).map(mapPhoto); if (!gd.error) rguides = (gd.data || []).map(mapGuide);
+    if (uid()) { const [a, b] = await Promise.all([sb.from('photo_likes').select('photo_id').eq('user_id', uid()), sb.from('guide_likes').select('guide_id').eq('user_id', uid())]);
+      if (!a.error) pLikes = new Set((a.data || []).map(x => x.photo_id)); if (!b.error) gLikes = new Set((b.data || []).map(x => x.guide_id)); } else { pLikes = new Set(); gLikes = new Set(); }
+    document.dispatchEvent(new CustomEvent('cloud-data'));
+  } catch (e) { console.warn('[cloud] pull', e && e.message); } }
+  /* 올리기 전에 한 번 더 줄인다 (긴 변 1280, 300KB 안팎) */
+  async function shrink(dataUrl) { const img = new Image(); await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = dataUrl; }); const k = Math.min(1, 1280 / Math.max(img.naturalWidth, img.naturalHeight)); const c = document.createElement('canvas'); c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k); c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    let q = 0.8, b = await new Promise(r => c.toBlob(r, 'image/jpeg', q)); while (b && b.size > 900000 && q > 0.4) { q -= 0.15; b = await new Promise(r => c.toBlob(r, 'image/jpeg', q)); } return b; }
+  async function uploadPhoto(ph) { if (!sb || !uid() || ph.rid || !ph.url || !/^data:/.test(ph.url)) return false;
+    const blob = await shrink(ph.url); if (!blob) return false; const path = `${uid()}/${ph.placeId}/${Date.now()}.jpg`;
+    const up = await sb.storage.from('photos').upload(path, blob, { contentType: 'image/jpeg' }); if (up.error) throw up.error;
+    const pub = sb.storage.from('photos').getPublicUrl(path).data.publicUrl;
+    const { data, error } = await sb.from('photos').insert({ place_id: ph.placeId, user_id: uid(), nickname: String(ph.nickname || '여행자').slice(0, 20), path, url: pub, created_at: ph.createdAt }).select('id,place_id,user_id,nickname,url,path,like_count,created_at').single();
+    if (error) { try { await sb.storage.from('photos').remove([path]); } catch (e) {} if (error.code === '23505') { ph.rid = -1; if (storeRef && storeRef.savePhoto) await storeRef.savePhoto(ph); return false; } /* 그날 그 명소에는 이미 올렸다 */ throw error; }
+    ph.rid = data.id; ph.rpath = path; if (storeRef && storeRef.savePhoto) await storeRef.savePhoto(ph); rphotos.unshift(mapPhoto(data)); return true; }
+  const guideId = g => g.rid || `${uid().slice(0, 8)}-${g.id}`;
+  async function saveGuide(g) { if (!sb || !uid()) return false; const rid = guideId(g); const { id, mine, rid: _r, needSync, likes, userId, author, ...data } = g;
+    const { error } = await sb.rpc('save_guide', { p_id: rid, p_title: String(g.title || '가이드').slice(0, 60), p_data: data, p_nickname: String(g.author || '여행자').slice(0, 20) }); if (error) throw error; return rid; }
+  /* 로그인 전에 만든 사진·가이드를 올린다 */
+  async function pushMine() { if (!sb || !uid()) return; let did = false;
+    try { const mine = (storeRef && storeRef.photos) || []; for (const ph of mine) { if (!ph.rid && /^data:/.test(ph.url || '')) { try { if (await uploadPhoto(ph)) did = true; } catch (e) { console.warn('[cloud] photo', e && e.message); break; } } } } catch (e) {}
+    try { const gl = get('lm-guides', []); let ch = false; for (const g of gl) { if (!g.rid || g.needSync) { try { g.rid = await saveGuide(g) || g.rid; delete g.needSync; ch = true; } catch (e) { console.warn('[cloud] guide', e && e.message); break; } } } if (ch) { set('lm-guides', gl); did = true; } } catch (e) {}
+    if (did) await pull(); }
+  const content = {
+    photosOf: placeId => rphotos.filter(x => x.placeId === placeId),
+    photoLiked: id => pLikes.has(+String(id).replace(/^r/, '')),
+    async likePhoto(id) { const rid = +String(id).replace(/^r/, ''); if (!uid()) return null; const { data, error } = await sb.rpc('toggle_photo_like', { p_photo_id: rid }); if (error) return null; const ph = rphotos.find(x => x.rid === rid); if (ph) ph.likes = data.like_count; data.liked ? pLikes.add(rid) : pLikes.delete(rid); return data.like_count; },
+    uploadPhoto: ph => uploadPhoto(ph).catch(e => { console.warn('[cloud] photo', e && e.message); return false; }),
+    /* 내가 올린 사진 지우기: 서버 기록과 파일을 함께 지운다 */
+    async removePhoto(rid) { if (!sb || !uid()) return false; const ph = rphotos.find(x => x.rid === rid); const { error } = await sb.from('photos').delete().eq('id', rid).eq('user_id', uid()); if (error) return false; if (ph && ph.rpath) { try { await sb.storage.from('photos').remove([ph.rpath]); } catch (e) {} } rphotos = rphotos.filter(x => x.rid !== rid); return true; },
+    guides: () => rguides, guideLiked: id => gLikes.has(id),
+    async likeGuide(id) { if (!uid()) return null; const { data, error } = await sb.rpc('toggle_guide_like', { p_guide_id: id }); if (error) return null; const g = rguides.find(x => x.id === id); if (g) g.likes = data.like_count; data.liked ? gLikes.add(id) : gLikes.delete(id); return data; },
+    /* 가이드를 올리거나 고쳤을 때: 로그인돼 있으면 바로, 아니면 표시해 뒀다가 로그인할 때 */
+    guideSaved(localId) { const gl = get('lm-guides', []); const g = gl.find(x => x.id === localId); if (!g) return; g.needSync = true; set('lm-guides', gl); if (uid()) pushMine(); },
+    async guideRemoved(g) { if (!sb || !uid() || !g || !g.rid) return; try { await sb.from('guides').delete().eq('id', g.rid).eq('user_id', uid()); rguides = rguides.filter(x => x.id !== g.rid); document.dispatchEvent(new CustomEvent('cloud-data')); } catch (e) {} },
+    pull,
+  };
   async function init(store) { storeRef = store; if (!sb) return; try { const { data } = await sb.auth.getSession(); session = data.session || null; } catch (e) {}
-    sb.auth.onAuthStateChange((ev, s) => { const was = uid(); session = s; if (uid() !== was) { document.dispatchEvent(new CustomEvent('cloud-auth')); if (uid()) sync(); } });
-    if (uid()) sync(); addEventListener('online', () => sync()); }
+    sb.auth.onAuthStateChange((ev, s) => { const was = uid(); session = s; if (uid() !== was) { document.dispatchEvent(new CustomEvent('cloud-auth')); if (uid()) sync().then(pushMine); else pull(); } });
+    pull().then(() => { if (uid()) sync().then(pushMine); }); addEventListener('online', () => { sync().then(pushMine); }); }
   const acct = {
     ready: !!sb, signedIn: () => !!uid(), email: () => (session && session.user && session.user.email) || '',
     name: () => { const m = session && session.user && session.user.user_metadata; return (m && (m.name || m.full_name)) || ''; },
@@ -62,6 +109,6 @@
     /* 계정·서버 기록 전부 삭제 */
     async deleteAccount() { if (!uid()) return; const { error } = await sb.rpc('delete_my_account'); if (error) throw new Error('서버 기록을 지우지 못했어요. 인터넷을 확인하고 다시 시도해 주세요'); try { await sb.auth.signOut(); } catch (e) {} session = null; },
   };
-  window.Cloud = { on, device, send, flush, pending: () => get('lm-outbox', []).length, init, sync, ...acct };
+  window.Cloud = { on, device, send, flush, pending: () => get('lm-outbox', []).length, init, sync, uid, ...acct, ...content };
   if (on) { setTimeout(flush, 3000); addEventListener('online', flush); }
 })();

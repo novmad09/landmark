@@ -25,6 +25,7 @@ const idb = {
   db: null,
   open() { return new Promise((res, rej) => { if (this.db) return res(this.db); const r = indexedDB.open('landmark-stamp', 2); r.onupgradeneeded = () => { const d = r.result; if (!d.objectStoreNames.contains('photos')) d.createObjectStore('photos', { keyPath: 'id' }); if (!d.objectStoreNames.contains('tripphotos')) d.createObjectStore('tripphotos', { keyPath: 'id' }); }; r.onsuccess = () => { this.db = r.result; this.db.onversionchange = () => { try { this.db.close(); } catch (e) {} this.db = null; }; res(this.db); }; r.onerror = () => rej(r.error); r.onblocked = () => rej(new Error('blocked')); /* 다른 탭이 옛 버전을 잡고 있으면 사진 없이 계속 간다 */ }); },
   async all() { try { const d = await this.open(); return await new Promise((res, rej) => { const q = d.transaction('photos').objectStore('photos').getAll(); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); }); } catch (e) { return []; } },
+  async del(id) { const d = await this.open(); return new Promise((res, rej) => { const q = d.transaction('photos', 'readwrite').objectStore('photos').delete(id); q.onsuccess = () => res(); q.onerror = () => rej(q.error); }); },
   async put(p) { const d = await this.open(); return new Promise((res, rej) => { const q = d.transaction('photos', 'readwrite').objectStore('photos').put(p); q.onsuccess = () => res(); q.onerror = () => rej(q.error); }); },
   async allTrip() { try { const d = await this.open(); return await new Promise((res, rej) => { const q = d.transaction('tripphotos').objectStore('tripphotos').getAll(); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); }); } catch (e) { return []; } },
   async putTrip(p) { const d = await this.open(); return new Promise((res, rej) => { const q = d.transaction('tripphotos', 'readwrite').objectStore('tripphotos').put(p); q.onsuccess = () => res(); q.onerror = () => rej(q.error); }); },
@@ -45,7 +46,7 @@ const Safety = {
   unblock(userId) { const b = this.blocked(); b.delete(userId); LS.set('lm-blocked', [...b]); },
   isBlocked(userId) { return !!userId && this.blocked().has(userId); },
   async report(kind, id, reason, extra) { const r = { kind, id, reason, ...(extra || {}), at: new Date().toISOString() }; const l = LS.get('lm-reports', []); l.push(r); LS.set('lm-reports', l);
-    if (window.Cloud && ['photo', 'guide', 'user'].includes(kind)) window.Cloud.send('reports', { target_type: kind, target_id: String(id), reason: String(reason || '').slice(0, 40), body: extra && extra.text ? String(extra.text).slice(0, 300) : null });
+    if (window.Cloud && ['photo', 'guide', 'user'].includes(kind)) window.Cloud.send('reports', { target_type: kind, target_id: String(id).replace(/^r(?=[0-9]+$)/, ''), reason: String(reason || '').slice(0, 40), body: extra && extra.text ? String(extra.text).slice(0, 300) : null });
     if (remote.sb) { const { error } = await remote.sb.from('reports').insert({ kind, target_id: id, reason, reporter: remote.session?.user?.id || null, extra: extra || null }); if (error) throw new Error('신고를 보내지 못했어요. 잠시 뒤 다시 시도해 주세요'); } return l.length; },
   reported(kind, id) { return LS.get('lm-reports', []).some(r => r.kind === kind && r.id === id); },
   /* 욕설·비하 표현 거르기 (올릴 때). 목록은 짧게 시작하고 서버에서 늘린다 */
@@ -86,18 +87,27 @@ const local = {
   async unstamp(placeId) { const s = this.stamps[placeId]; if (!s) return { ok: false, reason: '취소할 도장이 없어요' }; const t = s.last; /* 가장 최근 방문 하나를 지운다 */
     s.count = Math.max(0, s.count - 1); s.days = (s.days || [s.first, s.last]).filter(d => d && d !== t); if (!s.count || !s.days.length) delete this.stamps[placeId]; else { if (s.dawnDays) { s.dawnDays = s.dawnDays.filter(d => d !== t); s.dawn = s.dawnDays.length > 0; } /* 새벽 도장을 취소하면 해돋이 기록도 뺀다 */ s.last = s.days.slice().sort().at(-1); s.months = [...new Set(s.days.map(d => +d.slice(5, 7)))]; }
     LS.set('lm-stamps', this.stamps); if (window.Cloud) window.Cloud.unstamped(placeId, t); return { ok: true }; },
-  photosOf(placeId) { const bl = Safety.blocked(); return this.photos.filter(x => x.placeId === placeId && !bl.has(x.userId)).sort((a, b) => b.likes - a.likes || b.createdAt.localeCompare(a.createdAt)); },
+  /* 내 폰의 사진 + 서버에 올라온 다른 사람 사진. 내가 올려 서버에도 있는 사진은 서버 것 하나만 보인다 */
+  photosOf(placeId) { const bl = Safety.blocked(); const rem = window.Cloud && window.Cloud.photosOf ? window.Cloud.photosOf(placeId) : []; const have = new Set(rem.map(x => x.rid));
+    return [...this.photos.filter(x => x.placeId === placeId && !(x.rid && have.has(x.rid))), ...rem].filter(x => !bl.has(x.userId)).sort((a, b) => b.likes - a.likes || String(b.createdAt).localeCompare(String(a.createdAt))); },
   coverOf(placeId) { const ph = this.photosOf(placeId)[0]; return ph && ph.likes >= 0 ? ph : null; },
+  async savePhoto(ph) { await idb.put(ph); },
+  /* 내가 올린 사진인가 (이 폰에서 올렸거나, 내 계정으로 올린 것) */
+  isMine(ph) { return !!ph && ((this.user && ph.userId === this.user.id) || (window.Cloud && window.Cloud.uid && window.Cloud.uid() && ph.userId === window.Cloud.uid())); },
+  async removePhoto(ph) { if (!this.isMine(ph)) return false; const rid = ph.rid > 0 ? ph.rid : null; if (rid && !(await window.Cloud.removePhoto(rid))) return false; /* 서버부터. 실패하면 남겨 둔다 */
+    const loc = this.photos.filter(x => x.id === ph.id || (rid && x.rid === rid)); for (const x of loc) { try { await idb.del(x.id); } catch (e) {} } this.photos = this.photos.filter(x => !loc.includes(x)); return true; },
   async addPhoto(placeId, dataUrl, pos) {
     if (!this.user) return { ok: false, reason: '로그인이 필요해요' };
     if (!this.stamps[placeId] && !(window.Memory && window.Memory.of(placeId))) return { ok: false, reason: '다녀온 곳에만 사진을 올릴 수 있어요' };
     const t = kstToday(), todayCount = this.photos.filter(x => x.placeId === placeId && x.userId === this.user.id && kstDate(x.createdAt) === t).length;
     if (todayCount >= cfg.photosPerDay) return { ok: false, reason: '이 명소에는 하루에 한 장만 올릴 수 있어요. 내일 또 올려 주세요' };
     const ph = { id: 'ph-' + Date.now(), placeId, userId: this.user.id, nickname: this.user.nickname, url: dataUrl, likes: 0, createdAt: new Date().toISOString() };
-    await idb.put(ph); this.photos.push(ph); return { ok: true, photo: ph };
+    await idb.put(ph); this.photos.push(ph); if (window.Cloud && window.Cloud.signedIn && window.Cloud.signedIn()) window.Cloud.uploadPhoto(ph).then(ok => { if (ok) document.dispatchEvent(new CustomEvent('cloud-data')); }); /* 로그인돼 있으면 서버에도 올려 다른 사람이 볼 수 있게 */
+    return { ok: true, photo: ph };
   },
-  liked(photoId) { return this.likes.has(photoId); },
+  liked(photoId) { return String(photoId).startsWith('r') ? window.Cloud.photoLiked(photoId) : this.likes.has(photoId); },
   async toggleLike(photoId) {
+    if (String(photoId).startsWith('r')) { if (!window.Cloud.signedIn()) return 'login'; return window.Cloud.likePhoto(photoId); } /* 다른 사람 사진 추천은 서버에 */
     const ph = this.photos.find(x => x.id === photoId); if (!ph) return;
     if (this.likes.has(photoId)) { this.likes.delete(photoId); ph.likes = Math.max(0, ph.likes - 1); } else { this.likes.add(photoId); ph.likes++; }
     LS.set('lm-likes', [...this.likes]); await idb.put(ph); return ph.likes;
