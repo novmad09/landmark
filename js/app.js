@@ -917,6 +917,11 @@ const Block = { key: 'lmk-block', get() { try { return localStorage.getItem(this
     el.querySelector('#blkRe').onclick = async () => { if (!window.Cloud.signedIn()) { try { await window.Cloud.signIn(); } catch (e) {} return; } const st = await window.Cloud.checkStatus(); toast(st && st.blocked ? '아직 정지 상태예요' : st ? '정지가 풀렸어요' : '확인하지 못했어요. 인터넷을 확인해 주세요'); }; } };
 Block.show(); let delAsked = false;
 document.addEventListener('cloud-status', async e => { const st = e.detail || {}; Block.set(st.blocked || ''); Block.show();
+  if (!st.blocked && !st.deleting && st.strikes != null) { /* 경고·올리기 정지를 본인에게 알린다 (한 번씩만) */
+    const n = st.strikes || 0, seen = LS.get('lm-strikes-seen', 0), ban = st.banned || '', banSeen = LS.get('lm-ban-seen', ''), until = ban === 'forever' ? '기한 없이' : ban + '까지';
+    if (n !== seen) LS.set('lm-strikes-seen', n); if (ban !== banSeen) LS.set('lm-ban-seen', ban);
+    if (n > seen || (ban && ban !== banSeen)) { const t = n > seen ? `올린 내용이 운영 정책에 맞지 않아 삭제되었어요. 지금까지 경고 ${n}회예요.` : '';
+      ask({ title: ban ? '사진·가이드 올리기가 정지되었어요' : '경고를 받았어요', text: `${t}${t ? ' ' : ''}${ban ? `${until} 사진과 가이드를 올릴 수 없어요. 도장 찍기와 보기는 그대로 돼요.` : '경고 2회는 7일 올리기 정지, 3회는 영구 정지예요.'}`, yes: '확인', no: '이용약관 보기' }).then(v => { if (v === false) window.open('legal/terms.html', '_blank'); }); } }
   if (st.deleting && !st.blocked && !delAsked) { delAsked = true;
     if (await ask({ title: '탈퇴 처리 중인 계정이에요', text: `${st.deleting}에 완전히 지워질 예정이에요. 탈퇴를 취소하고 계속 쓸까요?`, yes: '탈퇴 취소', no: '로그아웃' })) { toast(await window.Cloud.cancelDelete() ? '탈퇴를 취소했어요. 도장 기록을 되찾는 중이에요' : '취소하지 못했어요. 다시 시도해 주세요'); } else { await window.Cloud.signOut(); toast('로그아웃했어요'); } delAsked = false; } });
 document.addEventListener('cloud-auth', () => { if (!screens.me.hidden) renderMe(); if (window.Cloud.signedIn()) toast('로그인했어요. 기록을 서버와 맞추는 중이에요'); });

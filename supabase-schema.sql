@@ -1,3 +1,4 @@
+-- ⚠ 실행 순서: schema.sql → admin.sql → account.sql. 이 파일은 정책을 모두 지우고 다시 만들기 때문에, 다시 실행했다면 admin.sql 과 account.sql 도 반드시 이어서 실행한다.
 -- 랜드마크 · Supabase 설계도 v2 (2026-11)
 -- 명소 목록은 앱 안(js/data.js)에 있고, 서버에는 사람들이 만든 기록만 둔다.
 -- 여러 번 실행해도 안전하다.

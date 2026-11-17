@@ -47,7 +47,7 @@
   let status = null, statusAt = 0;
   async function checkStatus() { if (!sb || !uid()) { status = null; return null; } try { const { data, error } = await sb.rpc('my_status'); if (!error) { status = data || {}; statusAt = Date.now(); document.dispatchEvent(new CustomEvent('cloud-status', { detail: status })); } } catch (e) {} return status; }
   const held = () => !!(status && (status.blocked || status.deleting));
-  async function go() { if (!uid()) return; await checkStatus(); if (held()) return; await sync(); await pushMine(); }
+  async function go() { if (!uid()) return; await checkStatus(); if (held()) return; await sync(); if (!status || !status.banned) await pushMine(); /* 올리기 정지 중에는 올리지 않는다(폰에는 남아 있다가 풀리면 올라간다) */ }
   async function sync() { if (!sb || !uid() || syncing || held()) return false; syncing = true; let changed = false; try {
     /* 1) 밀린 취소부터 보낸다 2) 폰 → 서버 3) 서버 → 폰 */
     let ops = q(); while (ops.length) { const op = ops[0]; if (op.op === 'del') { const { error } = await sb.from('stamps').delete().eq('user_id', uid()).eq('place_id', op.place_id).eq('day', op.day).eq('kind', 'gps'); if (error) throw error; } ops = q().slice(1); set('lm-syncq', ops); }
@@ -75,7 +75,7 @@
   /* 올리기 전에 한 번 더 줄인다 (긴 변 1280, 300KB 안팎) */
   async function shrink(dataUrl) { const img = new Image(); await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = dataUrl; }); const k = Math.min(1, 1280 / Math.max(img.naturalWidth, img.naturalHeight)); const c = document.createElement('canvas'); c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k); c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
     let q = 0.8, b = await new Promise(r => c.toBlob(r, 'image/jpeg', q)); while (b && b.size > 900000 && q > 0.4) { q -= 0.15; b = await new Promise(r => c.toBlob(r, 'image/jpeg', q)); } return b; }
-  async function uploadPhoto(ph) { if (!sb || !uid() || ph.rid || !ph.url || !/^data:/.test(ph.url)) return false;
+  async function uploadPhoto(ph) { if (status && (status.banned || status.blocked || status.deleting)) return false; if (!sb || !uid() || ph.rid || !ph.url || !/^data:/.test(ph.url)) return false;
     const blob = await shrink(ph.url); if (!blob) return false; const path = `${uid()}/${ph.placeId}/${Date.now()}.jpg`;
     const up = await sb.storage.from('photos').upload(path, blob, { contentType: 'image/jpeg' }); if (up.error) throw up.error;
     const pub = sb.storage.from('photos').getPublicUrl(path).data.publicUrl;

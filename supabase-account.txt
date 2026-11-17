@@ -36,6 +36,7 @@ create or replace function my_status() returns jsonb language sql stable securit
   select jsonb_build_object(
     'blocked', (select _fmt_until(a.blocked_until) from account_state a where a.user_id = auth.uid()),
     'banned', (select _fmt_until(p.banned_until) from profiles p where p.id = auth.uid()),
+    'strikes', (select p.strikes from profiles p where p.id = auth.uid()),
     'deleting', (select to_char((a.deleted_at + interval '7 days') at time zone 'Asia/Seoul', 'YYYY-MM-DD HH24:MI') from account_state a where a.user_id = auth.uid() and a.deleted_at is not null)) $$;
 revoke all on function my_status() from public, anon; grant execute on function my_status() to authenticated;
 
@@ -212,3 +213,13 @@ begin
   return n;
 end $$;
 grant execute on function admin_dummy_add(int, text[]), admin_dummy_clear() to authenticated;
+
+-- 신고 누적으로 먼저 가리기: 로그인한 서로 다른 사람 3명부터 (기기 번호는 꾸밀 수 있어서, 비로그인 신고는 운영자 검토로만 간다)
+create or replace function on_report() returns trigger language plpgsql security definer set search_path = public as $$
+declare v_n int; v_u int;
+begin
+  select count(distinct coalesce(user_id::text, device)), count(distinct user_id) into v_n, v_u from reports where target_type = new.target_type and target_id = new.target_id;
+  if new.target_type = 'photo' and new.target_id ~ '^[0-9]+$' then update photos set report_count = v_n, hidden = hidden or v_u >= 3 where id = new.target_id::bigint;
+  elsif new.target_type = 'guide' then update guides set report_count = v_n, hidden = hidden or v_u >= 3 where id = new.target_id; end if;
+  return new;
+end $$;
