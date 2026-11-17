@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>랜드마크 관리</title>
+<style>
+:root{--bg:#F5F6F8;--card:#fff;--ink:#1B1F2A;--soft:#667085;--line:#E3E6EC;--brand:#3B5BDB;--red:#D6336C;--ok:#2F9E44}
+@media (prefers-color-scheme:dark){:root{--bg:#14161B;--card:#1D2027;--ink:#ECEEF2;--soft:#9AA3B2;--line:#2E333D;--brand:#8FA6FF;--red:#FF7EB6;--ok:#69DB7C}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 -apple-system,"Apple SD Gothic Neo","IBM Plex Sans KR",sans-serif}
+.wrap{max-width:860px;margin:0 auto;padding:16px 16px 60px}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:6px 0 16px}h1{font-size:22px;margin:0}h2{font-size:17px;margin:26px 0 10px}
+.me{font-size:13px;color:var(--soft);text-align:right}
+button{font:inherit;cursor:pointer;border-radius:10px;border:1.5px solid var(--line);background:var(--card);color:var(--ink);padding:8px 14px}
+button.p{background:var(--brand);border-color:var(--brand);color:#fff}button.d{color:var(--red);border-color:var(--red)}button:disabled{opacity:.5}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px}.card b{display:block;font-size:26px;line-height:1.2}.card span{font-size:13px;color:var(--soft)}.card small{display:block;font-size:12px;color:var(--soft)}
+.chart{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13px}th,td{padding:5px 8px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}th:first-child,td:first-child{text-align:left}
+.bar{display:inline-block;height:8px;border-radius:4px;background:var(--brand);vertical-align:middle;margin-right:6px}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 12px}.tabs button[aria-selected=true]{background:var(--ink);color:var(--bg);border-color:var(--ink)}.tabs em{font-style:normal;font-weight:700;color:var(--red);margin-left:4px}.tabs button[aria-selected=true] em{color:inherit}
+.item{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-bottom:10px}
+.item .top{display:flex;justify-content:space-between;gap:10px;font-size:13px;color:var(--soft)}.item h3{margin:4px 0;font-size:16px}.item p{margin:4px 0;white-space:pre-wrap;overflow-wrap:anywhere}
+.item .acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center}.item input{font:inherit;padding:8px 10px;border-radius:10px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink);width:130px}
+.item img{max-width:220px;max-height:220px;border-radius:10px;display:block;margin:8px 0}.item a{color:var(--brand)}
+.empty{color:var(--soft);text-align:center;padding:28px 0}.note{font-size:13px;color:var(--soft)}.gate{max-width:420px;margin:18vh auto;text-align:center}
+.tag{display:inline-block;font-size:12px;padding:1px 8px;border-radius:999px;border:1px solid var(--line);color:var(--soft);margin-left:6px}
+</style>
+</head>
+<body>
+<div class="wrap" id="root"><div class="gate"><p class="note">불러오는 중…</p></div></div>
+<script src="vendor/supabase.js"></script>
+<script src="js/config.js"></script>
+<script src="js/data.js"></script>
+<script>
+(async () => {
+const cfg = window.APP_CONFIG, sb = window.supabase.createClient(cfg.cloudUrl, cfg.cloudKey), root = document.getElementById('root');
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const L = window.LANDMARKS || [], placeName = id => { const p = L.find(x => x.id === id); return p ? p.name : id; };
+const kst = iso => new Date(new Date(iso).getTime() + 9 * 3600e3).toISOString().slice(0, 16).replace('T', ' ');
+const who = r => r.nickname ? esc(r.nickname) : r.user_id ? '로그인 사용자' : '비로그인';
+const S = { tab: 'reports', stats: null, lists: {}, showDone: false };
+
+const { data: sess } = await sb.auth.getSession(); const user = sess.session && sess.session.user;
+if (!user) { root.innerHTML = `<div class="gate"><h1>랜드마크 관리</h1><p class="note">관리자 구글 계정으로 로그인해 주세요.</p><button class="p" id="in">구글로 로그인</button></div>`;
+  document.getElementById('in').onclick = () => sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: location.origin + location.pathname } }); return; }
+const { data: isAdmin } = await sb.rpc('is_admin');
+if (!isAdmin) { root.innerHTML = `<div class="gate"><h1>랜드마크 관리</h1><p>이 계정(${esc(user.email)})은 관리자가 아니에요.</p><button id="out">로그아웃</button></div>`; document.getElementById('out').onclick = async () => { await sb.auth.signOut(); location.reload(); }; return; }
+
+async function load() {
+  const [st, rp, sg, fx, fb] = await Promise.all([
+    sb.rpc('admin_stats'),
+    sb.from('reports').select('*').order('created_at', { ascending: false }).limit(300),
+    sb.from('suggestions').select('*').order('created_at', { ascending: false }).limit(300),
+    sb.from('fixes').select('*').order('created_at', { ascending: false }).limit(300),
+    sb.from('feedback').select('*').order('created_at', { ascending: false }).limit(300)]);
+  S.stats = st.data; S.err = st.error && st.error.message; S.lists = { reports: rp.data || [], suggestions: sg.data || [], fixes: fx.data || [], feedback: fb.data || [] };
+  /* 신고된 사진·가이드를 미리 불러 둔다 */
+  const pids = [...new Set(S.lists.reports.filter(r => r.target_type === 'photo' && /^[0-9]+$/.test(r.target_id)).map(r => +r.target_id))], gids = [...new Set(S.lists.reports.filter(r => r.target_type === 'guide').map(r => r.target_id))];
+  const [ph, gd] = await Promise.all([pids.length ? sb.from('photos').select('*').in('id', pids) : { data: [] }, gids.length ? sb.from('guides').select('id,user_id,nickname,title,hidden,report_count').in('id', gids) : { data: [] }]);
+  S.photos = Object.fromEntries((ph.data || []).map(x => [String(x.id), x])); S.guides = Object.fromEntries((gd.data || []).map(x => [x.id, x]));
+  render();
+}
+
+function render() { const s = S.stats || {}, w = s.wait || {}, days = s.days || [], max = Math.max(1, ...days.map(d => d.dau));
+  const card = (n, label, sub) => `<div class="card"><b>${n == null ? '–' : Number(n).toLocaleString()}</b><span>${label}</span>${sub ? `<small>${sub}</small>` : ''}</div>`;
+  root.innerHTML = `<header><h1>랜드마크 관리</h1><div class="me">${esc(user.email)}<br><button id="reload">새로고침</button> <button id="out">로그아웃</button></div></header>
+  ${S.err ? `<p class="note">통계를 불러오지 못했어요: ${esc(S.err)}</p>` : ''}
+  <h2>오늘 (${esc(s.today || '')})</h2>
+  <div class="cards">${card(s.dau, '오늘 이용자', `로그인 ${s.dau_login || 0}명`)}${card(s.stamps_today, '오늘 도장', `전체 ${Number(s.stamps || 0).toLocaleString()}`)}${card(s.new_users, '오늘 새 가입', `전체 ${Number(s.users || 0).toLocaleString()}명`)}${card(s.photos_today, '오늘 사진', `전체 ${s.photos || 0} · 숨김 ${s.photos_hidden || 0}`)}${card(s.guides_today, '오늘 가이드', `전체 ${s.guides || 0}`)}</div>
+  <p class="note">오늘 이용자는 앱을 연 기기 수예요(로그인하지 않은 사람 포함). 도장·사진·가이드는 로그인한 사람이 서버에 올린 것만 셉니다.</p>
+  <h2>최근 14일</h2>
+  <div class="chart"><table><tr><th>날짜</th><th>이용자</th><th>도장</th><th>새 가입</th><th>사진</th></tr>${days.slice().reverse().map(d => `<tr><td>${esc(d.day.slice(5))}</td><td><span class="bar" style="width:${Math.round(d.dau / max * 80)}px"></span>${d.dau}</td><td>${d.stamps}</td><td>${d.new_users}</td><td>${d.photos}</td></tr>`).join('')}</table></div>
+  ${(s.top_places || []).length ? `<h2>이번 주 도장 많은 명소</h2><div class="chart"><table>${s.top_places.map((t, i) => `<tr><td>${i + 1}. ${esc(placeName(t.place_id))}</td><td>${t.n}</td></tr>`).join('')}</table></div>` : ''}
+  <h2>처리할 것</h2>
+  <div class="tabs">${[['reports', '신고', w.reports], ['suggestions', '명소 제안', w.suggestions], ['fixes', '수정 제안', w.fixes], ['feedback', '문의', 0]].map(([k, t, n]) => `<button data-tab="${k}" aria-selected="${S.tab === k}">${t}${n ? `<em>${n}</em>` : ''}</button>`).join('')}
+    <label class="note" style="margin-left:auto;align-self:center"><input type="checkbox" id="done" ${S.showDone ? 'checked' : ''}> 처리한 것도 보기</label></div>
+  <div id="list">${list()}</div>`;
+  root.querySelector('#reload').onclick = load; root.querySelector('#out').onclick = async () => { await sb.auth.signOut(); location.reload(); };
+  root.querySelector('#done').onchange = e => { S.showDone = e.target.checked; render(); };
+  root.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { S.tab = b.dataset.tab; render(); });
+  root.querySelectorAll('[data-act]').forEach(b => b.onclick = () => act(b).catch(e => alertMsg('처리하지 못했어요: ' + (e.message || e))));
+}
+const alertMsg = m => { const d = document.createElement('div'); d.className = 'item'; d.style.cssText = 'position:fixed;left:16px;right:16px;bottom:16px;max-width:520px;margin:0 auto;border-color:var(--red)'; d.textContent = m; document.body.appendChild(d); setTimeout(() => d.remove(), 4000); };
+
+function list() { const rows = S.lists[S.tab] || [];
+  if (S.tab === 'reports') { /* 같은 대상끼리 묶는다 */
+    const g = {}; rows.forEach(r => { const k = r.target_type + '|' + r.target_id; (g[k] = g[k] || []).push(r); });
+    const groups = Object.values(g).filter(rs => S.showDone || rs.some(r => r.status === 'wait')); if (!groups.length) return '<p class="empty">처리할 신고가 없어요.</p>';
+    return groups.map(rs => { const r = rs[0], waiting = rs.some(x => x.status === 'wait'), ph = r.target_type === 'photo' ? S.photos[r.target_id] : null, gd = r.target_type === 'guide' ? S.guides[r.target_id] : null;
+      const body = r.target_type === 'photo' ? (ph ? `<img src="${esc(ph.url)}" alt=""><p>${esc(placeName(ph.place_id))} · 올린 사람 ${esc(ph.nickname || '')}${ph.hidden ? '<span class="tag">숨김 상태</span>' : ''}</p>` : '<p class="note">사진이 이미 지워졌어요.</p>')
+        : r.target_type === 'guide' ? (gd ? `<h3>${esc(gd.title)}</h3><p>올린 사람 ${esc(gd.nickname || '')}${gd.hidden ? '<span class="tag">숨김 상태</span>' : ''}</p>` : '<p class="note">가이드가 이미 지워졌어요.</p>') : `<p>사용자 ${esc(r.target_id)}</p>`;
+      return `<div class="item"><div class="top"><span>${r.target_type === 'photo' ? '사진' : r.target_type === 'guide' ? '가이드' : '사용자'} 신고 ${rs.length}건${waiting ? '' : '<span class="tag">' + (r.status === 'removed' ? '삭제함' : '문제없음') + '</span>'}</span><span>${kst(r.created_at)}</span></div>${body}
+        <p class="note">사유: ${rs.map(x => esc(x.reason || '없음') + (x.body ? ' (' + esc(x.body) + ')' : '')).join(' · ')}</p>
+        ${waiting && (ph || gd) ? `<div class="acts"><button class="d" data-act="remove" data-type="${r.target_type}" data-id="${esc(r.target_id)}">삭제하고 경고</button><button data-act="keep" data-type="${r.target_type}" data-id="${esc(r.target_id)}">문제없음 (되살리기)</button></div>` : waiting ? `<div class="acts"><button data-act="keep" data-type="${r.target_type}" data-id="${esc(r.target_id)}">닫기</button></div>` : ''}</div>`; }).join(''); }
+  if (S.tab === 'suggestions') { const v = rows.filter(r => S.showDone || r.status === 'wait'); if (!v.length) return '<p class="empty">새 명소 제안이 없어요.</p>';
+    return v.map(r => `<div class="item"><div class="top"><span>${who(r)}${r.show_name ? '' : '<span class="tag">이름 숨김</span>'}${r.status !== 'wait' ? `<span class="tag">${{ ok: '통과', no: '거절', dup: '중복' }[r.status]}${r.place_id ? ' · ' + esc(r.place_id) : ''}</span>` : ''}</span><span>${kst(r.created_at)}</span></div><h3>${esc(r.name)}</h3><p>${esc(r.descr || '')}</p>
+      <p><a href="https://map.naver.com/p/search/${encodeURIComponent(r.name)}" target="_blank" rel="noopener">네이버 지도에서 찾기</a> · <a href="https://www.google.com/maps?q=${r.lat},${r.lng}" target="_blank" rel="noopener">제안한 위치 (${Number(r.lat).toFixed(5)}, ${Number(r.lng).toFixed(5)})</a></p>
+      ${r.status === 'wait' ? `<div class="acts"><input placeholder="명소 번호 (예: L123)" data-pid="${r.id}"><button class="p" data-act="sg-ok" data-id="${r.id}">통과</button><button data-act="sg-dup" data-id="${r.id}">이미 있는 곳</button><button data-act="sg-no" data-id="${r.id}">넣지 않음</button></div><p class="note">통과: 먼저 앱의 명소 목록에 넣고, 그 명소 번호를 적어 주세요. 제안한 사람이 앱을 열면 첫 도장과 축하가 나가요.</p>` : ''}</div>`).join(''); }
+  if (S.tab === 'fixes') { const v = rows.filter(r => S.showDone || r.status === 'wait'); if (!v.length) return '<p class="empty">새 수정 제안이 없어요.</p>'; const K = { pos: '위치가 달라요', info: '설명이 틀려요', gone: '없어진 곳', etc: '그 밖에' };
+    return v.map(r => { const p = L.find(x => x.id === r.place_id); return `<div class="item"><div class="top"><span>${K[r.kind] || r.kind}${r.status !== 'wait' ? `<span class="tag">${r.status === 'done' ? '고침' : '넣지 않음'}</span>` : ''}</span><span>${kst(r.created_at)}</span></div><h3>${esc(placeName(r.place_id))} <span class="tag">${esc(r.place_id)}</span></h3><p>${esc(r.body || '')}</p>
+      ${r.lat != null ? `<p><a href="https://www.google.com/maps?q=${r.lat},${r.lng}" target="_blank" rel="noopener">보낸 위치 (${Number(r.lat).toFixed(5)}, ${Number(r.lng).toFixed(5)})</a>${r.accuracy ? ` · 오차 ${Math.round(r.accuracy)}m` : ''}${p ? ` · 지금 좌표 (${p.lat}, ${p.lng})` : ''}</p>` : ''}
+      ${r.status === 'wait' ? `<div class="acts"><button class="p" data-act="fx-done" data-id="${r.id}">고쳤음</button><button data-act="fx-no" data-id="${r.id}">넣지 않음</button></div>` : ''}</div>`; }).join(''); }
+  if (!rows.length) return '<p class="empty">문의가 없어요.</p>';
+  return rows.map(r => `<div class="item"><div class="top"><span>${r.user_id ? '로그인 사용자' : '비로그인'} · v${esc(r.app_version || '?')}</span><span>${kst(r.created_at)}</span></div><p>${esc(r.body)}</p><div class="acts"><button class="d" data-act="fb-del" data-id="${r.id}">지우기</button></div></div>`).join('');
+}
+
+async function act(b) { const a = b.dataset.act, id = b.dataset.id; b.disabled = true; let res;
+  if (a === 'remove' || a === 'keep') { if (a === 'remove' && !confirm('이 내용을 지우고 올린 사람에게 경고 1회를 줄까요?\n(2회째는 7일 정지, 3회째는 영구 정지)')) { b.disabled = false; return; }
+    res = await sb.rpc('admin_resolve', { p_type: b.dataset.type, p_id: id, p_remove: a === 'remove' }); if (res.error) throw res.error;
+    if (a === 'remove' && res.data && res.data.path) await sb.storage.from('photos').remove([res.data.path]); }
+  else if (a === 'sg-ok') { const pid = (root.querySelector(`[data-pid="${id}"]`).value || '').trim(); if (!pid) { b.disabled = false; return alertMsg('명소 번호를 적어 주세요'); } if (!L.some(p => p.id === pid) && !confirm(`앱의 명소 목록에 '${pid}'가 아직 없어요. 그래도 통과로 표시할까요?\n(명소를 넣어 배포한 뒤에 보상이 나가요)`)) { b.disabled = false; return; }
+    res = await sb.from('suggestions').update({ status: 'ok', place_id: pid }).eq('id', id); }
+  else if (a === 'sg-dup' || a === 'sg-no') res = await sb.from('suggestions').update({ status: a === 'sg-dup' ? 'dup' : 'no' }).eq('id', id);
+  else if (a === 'fx-done' || a === 'fx-no') res = await sb.from('fixes').update({ status: a === 'fx-done' ? 'done' : 'no' }).eq('id', id);
+  else if (a === 'fb-del') { if (!confirm('이 문의를 지울까요?')) { b.disabled = false; return; } res = await sb.from('feedback').delete().eq('id', id); }
+  if (res && res.error) throw res.error; await load(); }
+
+await load();
+})().catch(e => { document.getElementById('root').innerHTML = `<div class="gate"><p>관리 화면을 열지 못했어요.</p><p class="note">${String(e && e.message || e)}</p></div>`; });
+</script>
+</body>
+</html>

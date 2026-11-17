@@ -101,8 +101,12 @@
     /* 내가 보낸 명소 제안이 어떻게 됐는지 */
     async mySuggestions() { if (!sb) return []; try { const { data, error } = await sb.rpc('my_suggestions', { p_device: device() }); return error ? [] : (data || []); } catch (e) { return []; } },
   };
+  /* 하루에 한 번, '오늘 앱을 연 기기'로만 기록한다 (무엇을 했는지는 보내지 않는다) */
+  async function ping() { if (!sb || !navigator.onLine) return; const day = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10), key = day + (uid() ? '+' : '');
+    if (get('lm-ping', '') === key) return; try { const { error } = await sb.rpc('ping', { p_device: device(), p_version: String(cfg.version || '') }); if (!error) set('lm-ping', key); } catch (e) {} }
   async function init(store) { storeRef = store; if (!sb) return; try { const { data } = await sb.auth.getSession(); session = data.session || null; } catch (e) {}
-    sb.auth.onAuthStateChange((ev, s) => { const was = uid(); session = s; if (uid() !== was) { document.dispatchEvent(new CustomEvent('cloud-auth')); if (uid()) sync().then(pushMine); else pull(); } });
+    sb.auth.onAuthStateChange((ev, s) => { const was = uid(); session = s; if (uid() !== was) { document.dispatchEvent(new CustomEvent('cloud-auth')); ping(); if (uid()) sync().then(pushMine); else pull(); } });
+    ping(); addEventListener('visibilitychange', () => { if (!document.hidden) ping(); });
     pull().then(() => { if (uid()) sync().then(pushMine); }); addEventListener('online', () => { sync().then(pushMine); }); }
   const acct = {
     ready: !!sb, signedIn: () => !!uid(), email: () => (session && session.user && session.user.email) || '',
