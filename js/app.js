@@ -481,7 +481,7 @@ const shareBadgeImage = b => shareImage(() => window.ShareCard.badge(b), `뱃지
 
 /* ---------- 뱃지 ---------- */
 /* 내가 제안해서 명소가 된 곳 (data.js 의 by: 발견한 사람 닉네임) */
-function foundByMe() { const u = store.getUser(); return u && u.nickname ? L.filter(p => p.by && p.by === u.nickname) : []; }
+function foundByMe() { const u = store.getUser(); const ids = new Set(LS.get('lm-suggest', []).filter(x => x.status === 'ok' && x.placeId).map(x => x.placeId)); return L.filter(p => ids.has(p.id) || (p.by && u && u.nickname && p.by === u.nickname)); }
 function badgeCtx() { const u = store.getUser(); const mine = window.Guides.all().filter(g => g.mine); return { stamps: allSeen(), suggests: foundByMe().length, /* 뱃지는 제안한 수가 아니라 통과돼 명소가 된 수 */ photos: u ? store.photos.filter(x => x.userId === u.id).length : 0, myGuides: mine, sharedGuides: mine.length, regionStats: mapS.regionStats() }; }
 const badgeList = () => window.Badges.evaluate(badgeCtx());
 /* 새로 받은 뱃지를 쾅 하고 보여준다 (여러 개면 차례로) */
@@ -772,7 +772,7 @@ function renderMe() {
       <details class="prog progme"><summary>지역별 진행 <span>${sidos.length ? sidos.length + '개 시·도' : ''}</span></summary><div class="progbody">${sidos.length ? sidos.map(x => bar(x.sd, x.d, x.n)).join('') : '<p class="note">아직 도장이 없어요.</p>'}</div></details>
       <div class="melist">${window.Cloud.ready ? `<button type="button" class="meCloud"><span>☁️ ${window.Cloud.signedIn() ? '구글 계정 연결됨' : '구글로 로그인'}</span><small>${window.Cloud.signedIn() ? `${esc(window.Cloud.email())} · 기록이 서버에 보관돼요` : '기록을 서버에 보관해요. 폰을 바꿔도 남아요'}</small></button>` : ''}
         <button type="button" id="meMem"><span>📷 추억 사진 더하기</span><small>${window.Memory.count() ? `사진 ${window.Memory.count()}장 · 명소 ${Object.keys(window.Memory.places()).length}곳` : '지난 여행 사진으로 다녀온 곳을 찾아요'}</small></button>
-        ${LS.get('lm-suggest', []).length || foundByMe().length ? `<button type="button" id="meFound"><span>🧭 내가 제안한 명소</span><small>${foundByMe().length ? `명소가 된 곳 ${foundByMe().length}곳 · ` : ''}확인 중 ${LS.get('lm-suggest', []).filter(x => !L.some(p => p.name === x.name)).length}곳</small></button>` : ''}<button type="button" id="meSuggest"><span>💬 문의·제안</span><small>앱에 바라는 점이나 불편한 점을 알려 주세요</small></button>
+        ${LS.get('lm-suggest', []).length || foundByMe().length ? `<button type="button" id="meFound"><span>🧭 내가 제안한 명소</span><small>${foundByMe().length ? `명소가 된 곳 ${foundByMe().length}곳 · ` : ''}확인 중 ${LS.get('lm-suggest', []).filter(x => x.status !== 'ok' && !L.some(p => p.name === x.name)).length}곳</small></button>` : ''}<button type="button" id="meSuggest"><span>💬 문의·제안</span><small>앱에 바라는 점이나 불편한 점을 알려 주세요</small></button>
         <button type="button" id="meNotify" class="tog" role="switch" aria-checked="false"><span>🔔 알림 받기</span><i class="sw"></i></button>
         ${DEV ? `<button type="button" id="meTest"><span>🧪 테스트 모드</span><small>${cfg.testMode ? '켜짐 · 어디서나 도장' : '꺼짐 · 반경 안에서만'}</small></button>` : ''}
         ${Trips.trash().length ? `<button type="button" id="meTrash"><span>🗑 삭제한 여행 ${Trips.trash().length}</span><small>30일 안에 되살릴 수 있어요</small></button>` : ''}
@@ -795,8 +795,8 @@ function renderMe() {
     if (!window.Cloud.signedIn()) { toast('구글 로그인 화면으로 이동해요'); try { const { error } = await window.Cloud.signIn(); if (error) toast('로그인을 시작하지 못했어요'); } catch (e) { toast('로그인을 시작하지 못했어요'); } return; }
     if (await ask({ title: '로그아웃할까요?', text: '이 폰의 기록은 그대로 남아요. 다시 로그인하면 서버 기록과 합쳐져요.', yes: '로그아웃', no: '취소' })) { await window.Cloud.signOut(); toast('로그아웃했어요'); } });
   const sg = $('#meSuggest'); if (sg) sg.onclick = () => feedback();
-  const mf = $('#meFound'); if (mf) mf.onclick = () => { const found = foundByMe(), wait = LS.get('lm-suggest', []).filter(x => !L.some(p => p.name === x.name)); const el = document.createElement('div'); el.className = 'login pick';
-    el.innerHTML = `<div class="box"><h2>내가 제안한 명소</h2><div class="picklist">${found.map(p => `<button type="button" class="pk" data-id="${p.id}"><b>${esc(p.name)}</b><small>명소가 됐어요 · 눌러서 보기</small></button>`).join('')}${wait.map(x => `<div class="pk"><b>${esc(x.name)}</b><small>확인 중 · ${dotDate(x.at.slice(0, 10))} 제안</small></div>`).join('')}</div><button class="btn ghost" type="button" id="pkNo">닫기</button></div>`;
+  const mf = $('#meFound'); if (mf) mf.onclick = () => { const found = foundByMe(), wait = LS.get('lm-suggest', []).filter(x => x.status !== 'ok' && !L.some(p => p.name === x.name)); const el = document.createElement('div'); el.className = 'login pick';
+    el.innerHTML = `<div class="box"><h2>내가 제안한 명소</h2><div class="picklist">${found.map(p => `<button type="button" class="pk" data-id="${p.id}"><b>${esc(p.name)}</b><small>명소가 됐어요 · 눌러서 보기</small></button>`).join('')}${wait.map(x => `<div class="pk"><b>${esc(x.name)}</b><small>${x.status === 'no' ? '이번에는 넣지 않았어요' : x.status === 'dup' ? '이미 있는 명소예요' : '확인 중'} · ${dotDate(x.at.slice(0, 10))} 제안</small></div>`).join('')}</div><button class="btn ghost" type="button" id="pkNo">닫기</button></div>`;
     document.getElementById('app').appendChild(el); el.onclick = e => { if (e.target === el) el.remove(); }; el.querySelector('#pkNo').onclick = () => el.remove(); el.querySelectorAll('[data-id]').forEach(b => b.onclick = () => { el.remove(); openDetail(b.dataset.id); }); };
   const tr = $('#meTrash'); if (tr) tr.onclick = openTrash;
   const bl = $('#meBlocked'); if (bl) bl.onclick = async () => { const ids = [...window.Store.Safety.blocked()]; const el = document.createElement('div'); el.className = 'login pick'; el.innerHTML = `<div class="box"><h2>차단한 사용자</h2><div class="picklist">${ids.map(id => `<button type="button" class="pk" data-u="${id}"><b>${id}</b><small>눌러서 차단 풀기</small></button>`).join('')}</div><button class="btn ghost" type="button" id="pkNo">닫기</button></div>`; document.getElementById('app').appendChild(el); el.onclick = e => { if (e.target === el) el.remove(); }; el.querySelector('#pkNo').onclick = () => el.remove(); el.querySelectorAll('[data-u]').forEach(b => b.onclick = () => { window.Store.Safety.unblock(b.dataset.u); el.remove(); renderMe(); mapS.refresh(); toast('차단을 풀었어요'); }); };
@@ -911,4 +911,13 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !isNative)
 document.addEventListener('cloud-auth', () => { if (!screens.me.hidden) renderMe(); if (window.Cloud.signedIn()) toast('로그인했어요. 기록을 서버와 맞추는 중이에요'); });
 document.addEventListener('cloud-data', () => { if (document.querySelector('.viewer, .pedit, .stampscr, .login')) return; /* 뭔가 하고 있을 땐 건드리지 않는다 */ if (!screens.guide.hidden) renderGuide(); if (detailId && document.querySelector('#detail.open')) openDetail(detailId); });
 document.addEventListener('cloud-sync', () => { mapS.refresh(); if (!screens.dogam.hidden) renderDogam(); if (!screens.me.hidden) renderMe(); toast('서버에 있던 기록을 불러왔어요'); });
+/* 제안한 곳이 명소가 됐는지 확인: 됐으면 첫 도장을 주고 축하한다 (한 번만) */
+async function checkFound() { const rows = await window.Cloud.mySuggestions(); if (!rows.length) return; const done = new Set(LS.get('lm-found-done', [])); const loc = LS.get('lm-suggest', []); let ch = false;
+  for (const r of rows) { const l = loc.find(x => x.name === r.name); if (l && l.status !== r.status) { l.status = r.status; l.placeId = r.place_id || null; ch = true; }
+    if (r.status !== 'ok' || !r.place_id || done.has(r.id)) continue; const p = byId(r.place_id); if (!p) continue; /* 앱이 아직 그 명소를 모르면 다음 업데이트 뒤에 */
+    done.add(r.id); LS.set('lm-found-done', [...done]); store.grant(p.id, window.Store.kstDate(r.created_at)); mapS.refresh(); if (!screens.dogam.hidden) renderDogam(); if (!screens.me.hidden) renderMe();
+    notify('제안하신 곳이 명소가 됐어요!', `${p.name} · 첫 도장을 드렸어요`);
+    if (await ask({ title: '제안하신 곳이 명소가 됐어요!', text: `${p.name}\n발견한 사람으로 이름이 남고, 이 명소의 첫 도장을 드렸어요.`, yes: '명소 보기', no: '닫기' })) openDetail(p.id); await awardBadges(); }
+  if (ch) LS.set('lm-suggest', loc); }
+setTimeout(() => checkFound().catch(() => {}), 6000); document.addEventListener('cloud-auth', () => setTimeout(() => checkFound().catch(() => {}), 3000));
 })();

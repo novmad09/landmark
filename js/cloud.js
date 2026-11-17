@@ -8,9 +8,11 @@
   const device = () => { let d = get('lm-device', null); if (!d) { d = 'd-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 12); set('lm-device', d); } return d; };
   const TABLES = ['suggestions', 'fixes', 'feedback', 'reports'];
   async function post(table, row) {
+    if (typeof sbRef === 'function' && sbRef() && uidRef()) { const { error } = await sbRef().from(table).insert({ ...row, user_id: uidRef() }); if (error) { const e = new Error('cloud ' + error.code); e.status = /^(PGRST|2|4)/.test(String(error.code || '')) ? 400 : 500; throw e; } return; } /* 로그인돼 있으면 내 계정 이름으로 */
     const r = await fetch(`${url}/rest/v1/${table}`, { method: 'POST', headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' }, body: JSON.stringify(row) });
     if (!r.ok) { const e = new Error('cloud ' + r.status); e.status = r.status; throw e; }
   }
+  let sbRef = null, uidRef = () => null;
   let flushing = false;
   async function flush() { if (!on || flushing) return; flushing = true; try {
     let box = get('lm-outbox', []);
@@ -25,6 +27,7 @@
      다른 폰에서 로그인하면 내려받아 합친다. 지우는 것은 '취소'를 누른 것만 지운다. */
   const sb = on && window.supabase ? window.supabase.createClient(url, key) : null; let session = null, storeRef = null, syncing = false;
   const uid = () => session && session.user ? session.user.id : null;
+  sbRef = () => sb; uidRef = uid;
   const q = () => get('lm-syncq', []); const qPush = op => { const l = q(); l.push(op); set('lm-syncq', l.slice(-500)); };
   /* 폰의 도장을 서버 줄 모양으로 */
   function localRows() { const rows = [], u = uid(), st = get('lm-stamps', {});
@@ -95,6 +98,8 @@
     guideSaved(localId) { const gl = get('lm-guides', []); const g = gl.find(x => x.id === localId); if (!g) return; g.needSync = true; set('lm-guides', gl); if (uid()) pushMine(); },
     async guideRemoved(g) { if (!sb || !uid() || !g || !g.rid) return; try { await sb.from('guides').delete().eq('id', g.rid).eq('user_id', uid()); rguides = rguides.filter(x => x.id !== g.rid); document.dispatchEvent(new CustomEvent('cloud-data')); } catch (e) {} },
     pull,
+    /* 내가 보낸 명소 제안이 어떻게 됐는지 */
+    async mySuggestions() { if (!sb) return []; try { const { data, error } = await sb.rpc('my_suggestions', { p_device: device() }); return error ? [] : (data || []); } catch (e) { return []; } },
   };
   async function init(store) { storeRef = store; if (!sb) return; try { const { data } = await sb.auth.getSession(); session = data.session || null; } catch (e) {}
     sb.auth.onAuthStateChange((ev, s) => { const was = uid(); session = s; if (uid() !== was) { document.dispatchEvent(new CustomEvent('cloud-auth')); if (uid()) sync().then(pushMine); else pull(); } });

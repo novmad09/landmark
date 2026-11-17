@@ -92,6 +92,8 @@ const local = {
     return [...this.photos.filter(x => x.placeId === placeId && !(x.rid && have.has(x.rid))), ...rem].filter(x => !bl.has(x.userId)).sort((a, b) => b.likes - a.likes || String(b.createdAt).localeCompare(String(a.createdAt))); },
   coverOf(placeId) { const ph = this.photosOf(placeId)[0]; return ph && ph.likes >= 0 ? ph : null; },
   async savePhoto(ph) { await idb.put(ph); },
+  /* 도장을 그냥 준다 (제안한 곳이 명소가 됐을 때의 첫 도장). 이미 그날 도장이 있으면 그대로 */
+  grant(placeId, day) { const s = this.stamps[placeId] || { count: 0, first: day, last: null, days: [], months: [] }; s.days = s.days || [s.first, s.last].filter(Boolean); if (s.days.includes(day)) return false; s.days.push(day); s.days.sort(); s.count = (s.count || 0) + 1; s.first = s.days[0]; s.last = s.days[s.days.length - 1]; s.months = [...new Set(s.days.map(d => +d.slice(5, 7)))]; this.stamps[placeId] = s; LS.set('lm-stamps', this.stamps); if (window.Cloud) window.Cloud.stamped(); return true; },
   /* 내가 올린 사진인가 (이 폰에서 올렸거나, 내 계정으로 올린 것) */
   isMine(ph) { return !!ph && ((this.user && ph.userId === this.user.id) || (window.Cloud && window.Cloud.uid && window.Cloud.uid() && ph.userId === window.Cloud.uid())); },
   async removePhoto(ph) { if (!this.isMine(ph)) return false; const rid = ph.rid > 0 ? ph.rid : null; if (rid && !(await window.Cloud.removePhoto(rid))) return false; /* 서버부터. 실패하면 남겨 둔다 */

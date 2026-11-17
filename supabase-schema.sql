@@ -221,3 +221,14 @@ on conflict (id) do update set public = true, file_size_limit = 1048576, allowed
 drop policy if exists "photos upload own folder" on storage.objects; drop policy if exists "photos delete own files" on storage.objects;
 create policy "photos upload own folder" on storage.objects for insert with check (bucket_id = 'photos' and auth.uid()::text = (storage.foldername(name))[1]);
 create policy "photos delete own files" on storage.objects for delete using (bucket_id = 'photos' and auth.uid()::text = (storage.foldername(name))[1]);
+-- 자기 폴더의 파일을 볼 수 있어야 지울 수도 있다 (공개 주소로 보는 것과는 별개)
+drop policy if exists "photos read own files" on storage.objects;
+create policy "photos read own files" on storage.objects for select using (bucket_id = 'photos' and auth.uid()::text = (storage.foldername(name))[1]);
+
+-- 내가 보낸 명소 제안의 진행 상황 (로그인했으면 내 계정 것, 아니면 이 기기에서 보낸 것)
+create or replace function my_suggestions(p_device text) returns table (id bigint, name text, status text, place_id text, created_at timestamptz) language sql security definer set search_path = public as $$
+  select s.id, s.name, s.status, s.place_id, s.created_at from suggestions s
+  where (auth.uid() is not null and s.user_id = auth.uid()) or (p_device is not null and char_length(p_device) >= 12 and s.device = p_device)
+  order by s.created_at desc limit 200;
+$$;
+grant execute on function my_suggestions(text) to anon, authenticated;
