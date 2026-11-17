@@ -45,6 +45,7 @@ const Safety = {
   unblock(userId) { const b = this.blocked(); b.delete(userId); LS.set('lm-blocked', [...b]); },
   isBlocked(userId) { return !!userId && this.blocked().has(userId); },
   async report(kind, id, reason, extra) { const r = { kind, id, reason, ...(extra || {}), at: new Date().toISOString() }; const l = LS.get('lm-reports', []); l.push(r); LS.set('lm-reports', l);
+    if (window.Cloud && ['photo', 'guide', 'user'].includes(kind)) window.Cloud.send('reports', { target_type: kind, target_id: String(id), reason: String(reason || '').slice(0, 40), body: extra && extra.text ? String(extra.text).slice(0, 300) : null });
     if (remote.sb) { const { error } = await remote.sb.from('reports').insert({ kind, target_id: id, reason, reporter: remote.session?.user?.id || null, extra: extra || null }); if (error) throw new Error('신고를 보내지 못했어요. 잠시 뒤 다시 시도해 주세요'); } return l.length; },
   reported(kind, id) { return LS.get('lm-reports', []).some(r => r.kind === kind && r.id === id); },
   /* 욕설·비하 표현 거르기 (올릴 때). 목록은 짧게 시작하고 서버에서 늘린다 */

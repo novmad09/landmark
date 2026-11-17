@@ -415,7 +415,7 @@ function reportSheet(kind, id, userId, nick, after) {
   const REASONS = ['음란·선정적', '욕설·혐오', '광고·사기', '남의 사진·저작권', '위치가 틀림', '기타'];
   el.innerHTML = `<div class="box"><h2>${kind === 'photo' ? '사진' : '가이드'} 신고</h2><p>${nick ? `작성자 ${esc(nick)}` : ''}</p><div class="picklist">${REASONS.map(r => `<button type="button" class="pk" data-r="${r}"><b>${r}</b></button>`).join('')}</div>${userId ? `<button type="button" class="btn ghost danger" id="rpBlock">${esc(nick) || '이 사용자'} 차단하기</button>` : ''}<button class="btn ghost" type="button" id="rpNo">취소</button></div>`;
   document.getElementById('app').appendChild(el); el.onclick = e => { if (e.target === el) el.remove(); }; el.querySelector('#rpNo').onclick = () => el.remove();
-  el.querySelectorAll('[data-r]').forEach(b => b.onclick = async () => { el.remove(); try { await S.report(kind, id, b.dataset.r, { userId }); toast(cfg.supabaseUrl ? '신고를 보냈어요. 살펴보고 조치할게요' : '신고를 기록했어요'); } catch (e) { toast(e.message || '신고를 보내지 못했어요'); } });
+  el.querySelectorAll('[data-r]').forEach(b => b.onclick = async () => { el.remove(); try { await S.report(kind, id, b.dataset.r, { userId }); toast(cfg.cloudUrl ? '신고를 보냈어요. 살펴보고 조치할게요' : '신고를 기록했어요'); } catch (e) { toast(e.message || '신고를 보내지 못했어요'); } });
   const bk = el.querySelector('#rpBlock'); if (bk) bk.onclick = async () => { el.remove(); if (!(await ask({ title: `${nick || '이 사용자'}를 차단할까요?`, text: '이 사람이 올린 사진·가이드·댓글이 더 이상 보이지 않아요. 내 정보에서 풀 수 있어요.', yes: '차단', no: '취소' }))) return; S.block(userId); toast('차단했어요'); mapS.refresh(); after && after(); };
 }
 
@@ -822,7 +822,7 @@ function feedback() { const el = document.createElement('div'); el.className = '
   el.innerHTML = `<div class="box"><h2>문의·제안</h2><p>앱에 바라는 점이나 불편한 점을 알려 주세요.</p><textarea id="fbText" class="bigin" rows="5" maxlength="500" placeholder="예: 이런 기능이 있으면 좋겠어요"></textarea><p class="note">명소를 추천하려면 지도 화면의 '제안'을 눌러 주세요.</p><button class="btn primary" type="button" id="fbOk">보내기</button><button class="btn ghost cancel" type="button">취소</button></div>`;
   document.getElementById('app').appendChild(el); el.querySelector('.cancel').onclick = () => el.remove(); el.onclick = e => { if (e.target === el) el.remove(); };
   el.querySelector('#fbOk').onclick = async () => { const text = el.querySelector('#fbText').value.trim(); if (text.length < 5) { toast('조금 더 자세히 적어 주세요'); return; }
-    const l = LS.get('lm-feedback', []); l.push({ text, v: cfg.version, at: new Date().toISOString() }); LS.set('lm-feedback', l); try { await window.Store.Safety.report('feedback', 'app', 'feedback', { text }); } catch (e) {}
+    const l = LS.get('lm-feedback', []); l.push({ text, v: cfg.version, at: new Date().toISOString() }); LS.set('lm-feedback', l); window.Cloud.send('feedback', { body: text.slice(0, 500), app_version: cfg.version });
     el.remove(); toast('고마워요! 잘 읽어 볼게요'); }; }
 /* 지도의 '제안': 지금 있는 곳을 명소로 제안한다 */
 document.getElementById('suggBtn').onclick = async () => { if (!(await requireLogin())) return; if (!mapS.pos()) toast('내 위치를 켜면 지금 있는 곳으로 제안할 수 있어요'); suggestPlace(); };
@@ -839,7 +839,7 @@ function fixPlace(p) { const pos = mapS.pos(), fresh = pos && pos.at && Date.now
   el.querySelector('#fxOk').onclick = async () => { const text = el.querySelector('#fxText').value.trim(), cb = el.querySelector('#fxPos'), sendPos = kind === 'pos' && cb && cb.checked;
     if (!text && !sendPos) { toast('어떤 점이 틀렸는지 적어 주세요'); return; }
     const rec = { placeId: p.id, name: p.name, kind, text, pos: sendPos ? { lat: pos.lat, lng: pos.lng, accuracy: pos.accuracy || null } : null, at: new Date().toISOString() };
-    const l = LS.get('lm-fix', []); l.push(rec); LS.set('lm-fix', l); try { await window.Store.Safety.report('place', p.id, kind, { text, pos: rec.pos }); } catch (e) {}
+    const l = LS.get('lm-fix', []); l.push(rec); LS.set('lm-fix', l); window.Cloud.send('fixes', { place_id: p.id, kind, body: text.slice(0, 300) || null, lat: rec.pos ? rec.pos.lat : null, lng: rec.pos ? rec.pos.lng : null, accuracy: rec.pos ? rec.pos.accuracy : null });
     el.remove(); toast('고마워요! 확인하고 고칠게요'); }; }
 async function suggestPlace(draft) {
   const d = SG.draft = draft || SG.draft || { name: '', desc: '', pos: null, photo: null };
@@ -861,6 +861,7 @@ async function suggestPlace(draft) {
   el.querySelector('#sgGo').onclick = () => { readD();
     if (!d.name) { el.querySelector('#sgName').focus(); toast('이름을 적어 주세요'); return; } if (!d.desc) { el.querySelector('#sgDesc').focus(); toast('설명을 적어 주세요'); return; } if (!d.pos) { toast('위치를 찍어 주세요'); return; }
     const list = LS.get('lm-suggest', []); list.push({ name: d.name, desc: d.desc, pos: { lat: d.pos.lat, lng: d.pos.lng }, hasPhoto: !!d.photo, showName: d.showName !== false, by: (store.getUser() || {}).nickname || '', status: 'wait', at: new Date().toISOString() }); LS.set('lm-suggest', list);
+    window.Cloud.send('suggestions', { nickname: ((store.getUser() || {}).nickname || '').slice(0, 20) || null, name: d.name.slice(0, 40), descr: d.desc.slice(0, 300), lat: d.pos.lat, lng: d.pos.lng, show_name: d.showName !== false }); /* 사진은 로그인 연결 뒤에 함께 보낸다 */
     if (d.photo) { try { localStorage.setItem('lm-suggest-photo-' + (list.length - 1), d.photo); } catch (e) {} }
     SG.draft = null; el.remove(); toast(`'${d.name}' 제안을 받았어요. 고마워요!`); awardBadges(); };
 }
