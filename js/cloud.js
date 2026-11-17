@@ -112,7 +112,8 @@
     /* 도장을 찍거나 취소했을 때 앱이 알려 준다 */
     stamped() { sync(); }, unstamped(place_id, day) { if (!sb) return; qPush({ op: 'del', place_id, day }); sync(); },
     /* 계정·서버 기록 전부 삭제 */
-    async deleteAccount() { if (!uid()) return; const { error } = await sb.rpc('delete_my_account'); if (error) throw new Error('서버 기록을 지우지 못했어요. 인터넷을 확인하고 다시 시도해 주세요'); try { await sb.auth.signOut(); } catch (e) {} session = null; },
+    async deleteAccount() { if (!uid()) return; try { const { data } = await sb.from('photos').select('path').eq('user_id', uid()).limit(5000); const paths = (data || []).map(x => x.path).filter(Boolean); for (let i = 0; i < paths.length; i += 100) await sb.storage.from('photos').remove(paths.slice(i, i + 100)); } catch (e) {} /* 사진 파일부터 지운다 */
+      const { error } = await sb.rpc('delete_my_account'); if (error) throw new Error('서버 기록을 지우지 못했어요. 인터넷을 확인하고 다시 시도해 주세요'); try { await sb.auth.signOut(); } catch (e) {} session = null; },
   };
   window.Cloud = { on, device, send, flush, pending: () => get('lm-outbox', []).length, init, sync, uid, ...acct, ...content };
   if (on) { setTimeout(flush, 3000); addEventListener('online', flush); }
