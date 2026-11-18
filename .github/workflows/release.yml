@@ -1,0 +1,61 @@
+name: Android Release (AAB)
+# 스토어에 올릴 파일을 만든다. 직접 눌러야만 돈다 (Actions → Android Release → Run workflow)
+# 먼저 저장소 Settings → Secrets and variables → Actions 에 네 가지를 넣어야 한다:
+#   LM_KEYSTORE_B64  : 출시용 키 파일을 base64 로 바꾼 글자
+#   LM_KEYSTORE_PASS : 키 파일 암호
+#   LM_KEY_ALIAS     : 키 이름
+#   LM_KEY_PASS      : 키 암호
+on:
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: app
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Check signing key
+        env:
+          B64: ${{ secrets.LM_KEYSTORE_B64 }}
+        run: |
+          if [ -z "$B64" ]; then echo "::error::출시용 서명 키(LM_KEYSTORE_B64)가 아직 등록되지 않았어요"; exit 1; fi
+          echo "$B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          echo "LM_KEYSTORE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+      - name: Refuse test mode
+        run: |
+          if grep -qE "testMode:\s*true" js/config.js; then echo "::error::js/config.js 의 testMode 가 켜져 있어요. 끄고 다시 돌리세요"; exit 1; fi
+      - name: Web build + Capacitor sync
+        run: |
+          npm ci
+          npm run build:app
+          npx cap sync android
+      - name: Version
+        run: |
+          echo "VERSION_NAME=$(grep -oP "version: '\K[0-9.]+" js/config.js)" >> "$GITHUB_ENV"
+          echo "VERSION_CODE=$((1000 + ${{ github.run_number }}))" >> "$GITHUB_ENV"
+      - name: Build AAB
+        working-directory: android
+        env:
+          LM_KEYSTORE_PASS: ${{ secrets.LM_KEYSTORE_PASS }}
+          LM_KEY_ALIAS: ${{ secrets.LM_KEY_ALIAS }}
+          LM_KEY_PASS: ${{ secrets.LM_KEY_PASS }}
+        run: |
+          chmod +x gradlew
+          ./gradlew bundleRelease --no-daemon --stacktrace
+      - uses: actions/upload-artifact@v4
+        with:
+          name: landmark-release-v${{ env.VERSION_NAME }}-${{ env.VERSION_CODE }}
+          path: android/app/build/outputs/bundle/release/app-release.aab
+          retention-days: 14
