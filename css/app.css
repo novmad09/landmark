@@ -824,3 +824,12 @@ div.pk{display:flex;flex-direction:column;gap:2px;padding:12px 14px;border-radiu
 .blockscr h2{margin:0;font-size:24px}.blockscr p{margin:0;font-size:16px}.blockscr .note{font-size:14px;color:var(--ink-soft)}
 .blockscr .bseal{width:84px;height:84px;margin:0 auto 6px;border-radius:50%;border:4px solid #C8372D;color:#C8372D;display:grid;place-items:center;font-weight:900;font-size:24px;transform:rotate(-8deg)}
 .blockscr a.btn{text-decoration:none;display:flex;align-items:center;justify-content:center}
+
+/* 가까운 명소 칩: 오른쪽에서 잘리는 대신 흐려지게 (옆으로 밀어 더 볼 수 있다) */
+.near{-webkit-mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent);mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent)}
+/* 약관 등 문서 창 */
+.login.docv{padding:0;align-items:stretch}
+.docv .docbox{position:absolute;inset:0;background:#fff;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.docv header{display:flex;align-items:center;justify-content:space-between;padding:8px 8px 8px 18px;border-bottom:1px solid #e3e6ec;color:#1b1f2a;font-size:17px}
+.docv header .x{width:48px;height:48px;border:0;background:none;font-size:28px;color:#1b1f2a;border-radius:50%}
+.docv iframe{flex:1;width:100%;border:0;background:#fff}

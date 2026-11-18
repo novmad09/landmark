@@ -96,6 +96,9 @@ const local = {
   grant(placeId, day) { const s = this.stamps[placeId] || { count: 0, first: day, last: null, days: [], months: [] }; s.days = s.days || [s.first, s.last].filter(Boolean); if (s.days.includes(day)) return false; s.days.push(day); s.days.sort(); s.count = (s.count || 0) + 1; s.first = s.days[0]; s.last = s.days[s.days.length - 1]; s.months = [...new Set(s.days.map(d => +d.slice(5, 7)))]; this.stamps[placeId] = s; LS.set('lm-stamps', this.stamps); if (window.Cloud) window.Cloud.stamped(); return true; },
   /* 내가 올린 사진인가 (이 폰에서 올렸거나, 내 계정으로 올린 것) */
   isMine(ph) { return !!ph && ((this.user && ph.userId === this.user.id) || (window.Cloud && window.Cloud.uid && window.Cloud.uid() && ph.userId === window.Cloud.uid())); },
+  /* 서버에서 지워진(운영자가 삭제했거나 다른 기기에서 지운) 내 사진은 이 폰에서도 내린다. 방금 올린 사진은 건드리지 않는다 */
+  async dropRemoved(alive) { const old = Date.now() - 120000, gone = this.photos.filter(x => x.rid > 0 && !alive.has(x.rid) && new Date(x.createdAt).getTime() < old); if (!gone.length) return 0;
+    for (const x of gone) { try { await idb.del(x.id); } catch (e) {} } this.photos = this.photos.filter(x => !gone.includes(x)); return gone.length; },
   async removePhoto(ph) { if (!this.isMine(ph)) return false; const rid = ph.rid > 0 ? ph.rid : null; if (rid && !(await window.Cloud.removePhoto(rid))) return false; /* 서버부터. 실패하면 남겨 둔다 */
     const loc = this.photos.filter(x => x.id === ph.id || (rid && x.rid === rid)); for (const x of loc) { try { await idb.del(x.id); } catch (e) {} } this.photos = this.photos.filter(x => !loc.includes(x)); return true; },
   async addPhoto(placeId, dataUrl, pos) {
