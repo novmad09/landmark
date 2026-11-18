@@ -23,10 +23,11 @@
   const kst = ms => new Date(ms + 9 * 3600e3).toISOString().slice(0, 10);
 
   let list = [], urls = new Map(), busy = false; const rc = new Map(); /* 미리 살펴본 사진의 위치·날짜 (확인 누르면 다시 안 읽게) */
-  const isImg = f => /^image\//.test(f.type) || /\.(jpe?g|heic|heif|png|webp)$/i.test(f.name); const keyOf = f => `${f.name}|${f.size}|${f.lastModified}`;
+  const isImg = f => /^image\//.test(f.type) || /\.(jpe?g|heic|heif|png|webp)$/i.test(f.name); const keyOf = f => f._key || `${f.name}|${f.size}|${f.lastModified}`; /* _key·_meta·_thumb: 앱이 사진첩에서 직접 읽어 온 사진(내용 없이 위치·날짜만 들고 온다) */
   const url = m => { if (!m.thumb) return ''; let u = urls.get(m.id); if (!u) { u = URL.createObjectURL(m.thumb); urls.set(m.id, u); } return u; };
 
   async function thumb(file, size) { size = size || 480;
+    if (file._thumb) { try { return await file._thumb(size); } catch (e) { return null; } }
     try {
       let bmp; try { bmp = await createImageBitmap(file, { resizeWidth: Math.round(size * 1.33), resizeQuality: 'medium' }); } catch (e) { bmp = await createImageBitmap(file); } /* 큰 사진을 통째로 풀지 않게 줄여서 연다 */
       const k = Math.min(1, size / Math.max(bmp.width, bmp.height));
@@ -36,6 +37,7 @@
     } catch (e) { return null; } /* HEIC 등 브라우저가 못 여는 사진은 미리보기 없이 기록만 */
   }
   async function read(file) {
+    if (file._meta) return file._meta;
     let gps = null, at = null;
     try { const x = window.exifr && await window.exifr.parse(file); /* 한 번에 위치·날짜 */
       if (x) { if (isFinite(x.latitude) && isFinite(x.longitude) && (x.latitude || x.longitude)) gps = { lat: x.latitude, lng: x.longitude };

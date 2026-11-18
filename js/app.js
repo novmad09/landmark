@@ -61,12 +61,19 @@ async function folderFiles(onCount) {
   return new Promise(res => { const i = probe; i.type = 'file'; i.webkitdirectory = true; i.multiple = true; i.hidden = true; document.body.appendChild(i);
     const fin = v => { res(v); i.remove(); }; i.onchange = () => fin([...(i.files || [])].filter(f => !/(^|\/)\./.test(f.webkitRelativePath || ''))); i.oncancel = () => fin([]); i.click(); }); }
 /* 알아서: 폴더 통째로 읽기 → 준비(미리 살펴보기) → 확인 누르면 지도에 찍기 */
+/* 앱: 사진첩 전체에서 찍은 위치·날짜만 읽어 온다. 사진 내용은 읽지 않고, 지도에 올리기로 한 사진만 작은 미리보기를 만든다 */
+const LmN = isNative && Cap.Plugins ? Cap.Plugins.LmNative || null : null;
+async function galleryFiles(onCount) { let sub = null; try { sub = await LmN.addListener('galleryProgress', e => onCount(e.done, e.total)); } catch (e) {}
+  let r; try { r = await LmN.scanGallery(); } catch (e) { return String(e && e.message || e).includes('denied') ? 'denied' : null; } finally { try { sub && sub.remove(); } catch (e) {} }
+  const b64 = async (id, size) => { const t = await LmN.thumb({ id, size }); return await (await fetch('data:image/jpeg;base64,' + t.data)).blob(); };
+  return (r.items || []).map(([id, lat, lng, at, exif, size]) => { const f = new File([], `photo-${id}.jpg`, { type: 'image/jpeg', lastModified: at }); f._key = `ms|${id}|${size}`; f._meta = { gps: { lat, lng }, at, exifDate: !!exif }; f._thumb = sz => b64(id, sz); return f; }); }
 async function memAuto(opts) { opts = opts || {}; if (window.Memory.busy()) return null;
-  if (!(await ask({ title: '사진 폴더를 골라 주세요', text: '다음 화면에서 사진이 들어 있는 폴더(보통 DCIM 안의 Camera)를 열고 \'이 폴더 사용\'을 눌러 주세요. 처음 한 번만 물어봐요.', yes: '폴더 고르기', no: '취소' }))) return null;
+  if (!(await ask(LmN ? { title: '사진첩에서 다녀온 곳을 찾을까요?', text: '사진을 찍은 위치와 날짜만 읽어요. 사진은 폰 밖으로 나가지 않아요. 다음에 나오는 \'사진 접근 허용\'에서 \'모두 허용\'을 눌러 주세요.', yes: '찾아보기', no: '취소' } : { title: '사진 폴더를 골라 주세요', text: '다음 화면에서 사진이 들어 있는 폴더(보통 DCIM 안의 Camera)를 열고 \'이 폴더 사용\'을 눌러 주세요. 처음 한 번만 물어봐요.', yes: '폴더 고르기', no: '취소' }))) return null;
   const el = document.createElement('div'); el.className = 'login memprog'; const ctl = { stop: false };
   el.innerHTML = `<div class="box"><h2>사진을 모으는 중…</h2><div class="bar"><i></i></div><p class="note" id="mpN">잠시만요</p><p class="note">사진은 보지 않고 위치와 날짜만 확인해요</p><button class="btn ghost" type="button" id="mpStop" hidden>그만하기</button></div>`;
   const N = t => { const n = el.querySelector('#mpN'); if (n) n.textContent = t; };
-  document.getElementById('app').appendChild(el); const files = await folderFiles(n => N(`${n.toLocaleString()}장`));
+  document.getElementById('app').appendChild(el); const files = LmN ? await galleryFiles((d, t) => N(`${d.toLocaleString()} / ${t.toLocaleString()}장 확인`)) : await folderFiles(n => N(`${n.toLocaleString()}장`));
+  if (files === 'denied') { el.remove(); toast('사진 접근을 허용해야 찾을 수 있어요. 설정 > 앱 > 랜드마크 > 권한에서 바꿀 수 있어요'); return null; }
   if (files === null) { el.remove(); toast('이 폰에서는 폴더를 통째로 읽을 수 없어요. 사진을 골라 주세요'); return memImport({ ...opts, pick: true }); }
   if (!files.length) { el.remove(); return null; }
   el.querySelector('h2').textContent = '다녀온 곳을 찾는 중…'; const sb = el.querySelector('#mpStop'); sb.hidden = false; sb.onclick = () => { ctl.stop = true; sb.disabled = true; };
@@ -150,6 +157,8 @@ const Back = (() => {
     if (closeTop()) return arm(); if (tab() !== 'map') { showTab('map'); return arm(); }
     /* 맨 바깥(지도)에서 뒤로: 바로 닫지 않고 한 번 더 누르면 닫힌다 */
     exitUntil = Date.now() + 2200; toast('한 번 더 누르면 앱이 닫혀요'); setTimeout(() => { if (!onTrap) arm(); }, 2300); });
+  /* 앱: 폰의 뒤로 가기 버튼. 돌아갈 칸이 있으면 한 칸 뒤로(위의 덫이 받는다), 없으면(안내가 뜬 뒤 한 번 더) 앱을 닫는다 */
+  if (isNative && Cap.Plugins && Cap.Plugins.App) Cap.Plugins.App.addListener('backButton', ev => { if (ev && ev.canGoBack) history.back(); else Cap.Plugins.App.exitApp(); });
   return {};
 })();
 /* 탭은 주소(#)에 적지 않는다: 뒤로 가기 기록과 엇갈리지 않게 */
@@ -714,7 +723,8 @@ function routePick(p) { const me = mapS.pos(), nm = encodeURIComponent(p.name.re
   const google = `https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}&travelmode=transit`;
   const el = document.createElement('div'); el.className = 'login routepick';
   el.innerHTML = `<div class="box"><h2>어느 지도로 볼까요?</h2><a class="btn primary" href="${naver}" target="_blank" rel="noopener">네이버 지도</a><a class="btn ghost" href="${google}" target="_blank" rel="noopener">구글 지도</a></div>`;
-  document.getElementById('app').appendChild(el); el.onclick = e => { if (e.target === el || e.target.closest('a')) setTimeout(() => el.remove(), 50); }; }
+  document.getElementById('app').appendChild(el); el.onclick = e => { if (e.target === el || e.target.closest('a')) setTimeout(() => el.remove(), 50); };
+  if (LmN) el.querySelector('a.primary').addEventListener('click', e => { e.preventDefault(); LmN.openApp({ url: 'nmap://' + nQ, fallback: nWeb }).catch(() => {}); }); /* 앱: 네이버 지도 앱을 바로 열고, 없으면 웹으로 */ }
 document.addEventListener('click', e => { const a = e.target.closest('a[data-route]'); if (!a) return; const p = byId(a.dataset.route); if (!p) return; e.preventDefault(); routePick(p); });
 function pickPhoto(id) {
   (async () => { if (!(await requireLogin())) return; const p = byId(id);
@@ -924,6 +934,7 @@ document.addEventListener('cloud-status', async e => { const st = e.detail || {}
       ask({ title: ban ? '사진·가이드 올리기가 정지되었어요' : '경고를 받았어요', text: `${t}${t ? ' ' : ''}${ban ? `${until} 사진과 가이드를 올릴 수 없어요. 도장 찍기와 보기는 그대로 돼요.` : '경고 2회는 7일 올리기 정지, 3회는 영구 정지예요.'}`, yes: '확인', no: '이용약관 보기' }).then(v => { if (v === false) window.open('legal/terms.html', '_blank'); }); } }
   if (st.deleting && !st.blocked && !delAsked) { delAsked = true;
     if (await ask({ title: '탈퇴 처리 중인 계정이에요', text: `${st.deleting}에 완전히 지워질 예정이에요. 탈퇴를 취소하고 계속 쓸까요?`, yes: '탈퇴 취소', no: '로그아웃' })) { toast(await window.Cloud.cancelDelete() ? '탈퇴를 취소했어요. 도장 기록을 되찾는 중이에요' : '취소하지 못했어요. 다시 시도해 주세요'); } else { await window.Cloud.signOut(); toast('로그아웃했어요'); } delAsked = false; } });
+document.addEventListener('cloud-login-failed', () => toast('로그인하지 못했어요. 다시 시도해 주세요'));
 document.addEventListener('cloud-auth', () => { if (!screens.me.hidden) renderMe(); if (window.Cloud.signedIn()) toast('로그인했어요. 기록을 서버와 맞추는 중이에요'); });
 document.addEventListener('cloud-data', () => { if (document.querySelector('.viewer, .pedit, .stampscr, .login')) return; /* 뭔가 하고 있을 땐 건드리지 않는다 */ if (!screens.guide.hidden) renderGuide(); if (detailId && document.querySelector('#detail.open')) openDetail(detailId); });
 document.addEventListener('cloud-sync', () => { mapS.refresh(); if (!screens.dogam.hidden) renderDogam(); if (!screens.me.hidden) renderMe(); toast('서버에 있던 기록을 불러왔어요'); });
