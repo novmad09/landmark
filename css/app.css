@@ -835,3 +835,4 @@ div.pk{display:flex;flex-direction:column;gap:2px;padding:12px 14px;border-radiu
 .docv iframe{flex:1;width:100%;border:0;background:#fff}
 
 @media (prefers-color-scheme: dark){.docv .docbox,.docv iframe{background:#15171C}.docv header{color:#ECEEF2;border-bottom-color:#3a3f4a}.docv header .x{color:#ECEEF2}}
+.me-id .bio{min-height:40px;display:flex;align-items:center}

@@ -104,9 +104,15 @@ function items() {
 }
 function merge(list, thr, r) { const out = [];
   list.filter(i => i.x > -80 && i.x < r.width + 80 && i.y > -80 && i.y < r.height + 80).forEach(i => { const hit = out.find(o => Math.hypot(o.x - i.x, o.y - i.y) < thr);
-    if (!hit) { out.push({ ...i, parts: [i] }); return; } hit.parts.push(i); hit.ms = hit.ms.concat(i.ms);
-    hit.x = hit.parts.reduce((a, p) => a + p.x, 0) / hit.parts.length; hit.y = hit.parts.reduce((a, p) => a + p.y, 0) / hit.parts.length; hit.type = 'cl'; hit.key = 'm:' + hit.parts.map(p => p.key).sort().join('|');
-    hit.label = hit.parts[0].type === 'pin' ? null : `${hit.parts[0].label} 외 ${hit.parts.length - 1}`; }); return out; }
+    if (!hit) { out.push({ ...i, parts: [i] }); return; } hit.parts.push(i); hit.ms = hit.ms.concat(i.ms); hit.x = hit.parts.reduce((t, p) => t + p.x, 0) / hit.parts.length; hit.y = hit.parts.reduce((t, p) => t + p.y, 0) / hit.parts.length; });
+  /* 합친 묶음은 글자가 길어 더 넓다. 더 겹치는 것이 없을 때까지 되풀이해 합친다 */
+  const lab = h => h.parts.length > 1 ? (h.parts[0].type === 'pin' ? '00' : `${h.parts[0].label} 외 0`) : (h.label || '00'), wid = h => 34 + 15 * lab(h).length;
+  const near = (a, b) => (a.parts.length > 1 || b.parts.length > 1 || a.type === 'cl') && Math.abs(a.x - b.x) < (wid(a) + wid(b)) / 2 - 6 && Math.abs(a.y - b.y) < 56;
+  for (let again = true, n = 0; again && n < 200; n++) { again = false;
+    for (let a = 0; a < out.length && !again; a++) for (let b = a + 1; b < out.length; b++) if (near(out[a], out[b])) { const h = out[a], o = out[b];
+      h.parts = h.parts.concat(o.parts); h.ms = h.ms.concat(o.ms); h.x = h.parts.reduce((t, p) => t + p.x, 0) / h.parts.length; h.y = h.parts.reduce((t, p) => t + p.y, 0) / h.parts.length; out.splice(b, 1); again = true; break; } }
+  out.forEach(h => { if (h.parts.length < 2) return; const pin = h.parts[0].type === 'pin'; h.type = 'cl'; h.key = 'm:' + h.parts.map(p => p.key).sort().join('|'); h.label = pin ? null : `${h.parts[0].label} 외 ${h.parts.length - 1}`; });
+  return out; }
 
 function renderOverlay() {
   if (!map.loaded() && !map._loaded) {}
@@ -276,7 +282,7 @@ function init(opts) {
   let last = null; try { last = JSON.parse(localStorage.getItem('lm-lastpos')); } catch (e) {}
   S = { me: last, live: false, accuracyOk: false, sel: null, filter: { set: '', cat: '', sido: '', gu: '', seen: '' } };
   map = new maplibregl.Map({ container: 'gl', style: styleWithSources(), center: last ? [last.lng, last.lat] : [127.0, 37.55], zoom: last ? 12.5 : 11, minZoom: 5.5, maxZoom: 18, dragRotate: false, pitchWithRotate: false, touchPitch: false, maxPitch: 0, /* 기울이기·돌리기 없음: 늘 위에서 본 평면 지도 */
-    attributionControl: { compact: true } }); /* 출처 문구는 타일 스타일에 들어 있다 (중복 방지) */
+    attributionControl: false }); map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-left'); /* 출처 문구는 타일 스타일에 들어 있다 (중복 방지) */
   try { map.touchZoomRotate.disableRotation(); map.keyboard.disableRotation(); } catch (e) {}
   map.touchZoomRotate.disableRotation(); map.keyboard.disableRotation(); 
   map.addControl(new maplibregl.ScaleControl({ unit: 'metric', maxWidth: 90 }), 'bottom-left');
