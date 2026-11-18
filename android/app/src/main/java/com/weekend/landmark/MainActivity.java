@@ -1,4 +1,4 @@
-package kr.landmarkstamp.app;
+package com.weekend.landmark;
 
 import android.os.Bundle;
 

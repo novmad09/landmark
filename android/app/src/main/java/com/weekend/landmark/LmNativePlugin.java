@@ -1,4 +1,4 @@
-package kr.landmarkstamp.app;
+package com.weekend.landmark;
 
 import android.Manifest;
 import android.content.ContentUris;

@@ -7,7 +7,7 @@
 | 항목 | 내용 |
 |---|---|
 | 앱 이름 (30자) | 랜드마크 - 전국 명소 도장 여행 |
-| 패키지 이름 | kr.landmarkstamp.app (한 번 올리면 못 바꿈) |
+| 패키지 이름 | com.weekend.landmark (한 번 올리면 못 바꿈) |
 | 분류 | 여행 및 지역정보 |
 | 연락처 메일 | novmad09@gmail.com |
 | 개인정보처리방침 주소 | https://novmad09.github.io/landmark/legal/privacy.html |
