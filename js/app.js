@@ -111,7 +111,7 @@ function memResult(r, opts) {
   const total = Object.keys(window.Memory.places()).length; const none = !r.matched && !r.loose;
   const el = document.createElement('div'); el.className = 'login memres';
   el.innerHTML = `<div class="box"><h2>${none ? (r.skipped && !r.added ? '이미 다 불러온 사진이에요' : '위치가 담긴 사진을 못 찾았어요') : total ? `추억 명소 ${total}곳을 찾았어요!` : '사진을 지도에 올렸어요'}</h2>
-    ${none ? `<p>${r.skipped && !r.added ? '새 사진만 더해져요. 이전 기록은 그대로예요.' : '사진에 위치가 없거나, 고르는 화면이 위치를 빼고 줬을 수 있어요. \'파일에서 고르기\'로 다시 해 보세요.'}</p>` : `<ul class="memsum"><li>명소 <b>${r.places}</b>곳 · 사진 <b>${r.matched}</b>장</li>${r.loose ? `<li>다른 곳 사진 <b>${r.loose}</b>장 · 지도에 분홍 점</li>` : ''}${r.noLoc ? `<li>위치 없는 사진 ${r.noLoc}장 · 명소에서 직접 추가</li>` : ''}${r.skipped ? `<li>이미 있는 사진 ${r.skipped}장은 그대로</li>` : ''}</ul>`}
+    ${none ? `<p>${r.skipped && !r.added ? '새 사진만 더해져요. 이전 기록은 그대로예요.' : (LmN ? '사진에 찍은 위치가 남아 있어야 다녀온 곳을 찾을 수 있어요.' : '사진에 위치가 없거나, 고르는 화면이 위치를 빼고 줬을 수 있어요. \'파일에서 고르기\'로 다시 해 보세요.')}</p>${r.noLoc ? `<p class="note">위치 없는 사진 ${r.noLoc.toLocaleString()}장은 넣지 못했어요. 카메라 설정에서 <b>위치 태그</b>를 켜 두면 앞으로 찍는 사진은 자동으로 찾아져요. 지금 있는 사진은 명소 화면의 \'사진 남기기\'로 직접 넣을 수 있어요.</p>` : ''}` : `<ul class="memsum"><li>명소 <b>${r.places}</b>곳 · 사진 <b>${r.matched}</b>장</li>${r.loose ? `<li>다른 곳 사진 <b>${r.loose}</b>장 · 지도에 분홍 점</li>` : ''}${r.noLoc ? `<li>위치 없는 사진 ${r.noLoc.toLocaleString()}장은 넣지 못했어요 · 카메라의 위치 태그를 켜 보세요</li>` : ''}${r.skipped ? `<li>이미 있는 사진 ${r.skipped}장은 그대로</li>` : ''}</ul>`}
     <p class="note">사진은 언제든 더할 수 있어요. 이전 기록은 그대로 남아요.</p>
     <button class="btn primary" type="button" id="mrOk">${none ? '닫기' : '지도에서 보기'}</button>${none ? '<button class="btn ghost" type="button" id="mrAny">파일에서 고르기</button>' : '<button class="btn ghost" type="button" id="mrMore">사진 더 고르기</button>'}</div>`;
   document.getElementById('app').appendChild(el); const close = () => el.remove();
@@ -734,6 +734,11 @@ function routePick(p) { const me = mapS.pos(), nm = encodeURIComponent(p.name.re
     if (has.kakao) opts.push({ name: '카카오맵', href: nWeb, go: open(kakao, 'net.daum.android.map') });
     if (has.google) opts.push({ name: '구글 지도', href: google, go: open(google, 'com.google.android.apps.maps') });
     if (!opts.length) return LmN.openApp({ url: nWeb }).catch(() => {}); if (opts.length === 1) return opts[0].go(); show(opts); })(); }
+/* 약관·개인정보처리방침: 새 창으로 내보내지 않고 앱 위에 겹쳐 보여 준다 (앱에서는 화면이 통째로 바뀌어 버리므로) */
+function openDoc(url, title) { const el = document.createElement('div'); el.className = 'login docv';
+  el.innerHTML = `<div class="docbox"><header><b>${esc(title || '')}</b><button class="x" type="button" aria-label="닫기">×</button></header><iframe src="${esc(url)}" title="${esc(title || '문서')}"></iframe></div>`;
+  document.getElementById('app').appendChild(el); el.querySelector('.x').onclick = () => el.remove(); }
+document.addEventListener('click', e => { const a = e.target.closest('a[href^="legal/"]'); if (!a) return; e.preventDefault(); openDoc(a.getAttribute('href'), a.textContent.trim()); });
 document.addEventListener('click', e => { const a = e.target.closest('a[data-route]'); if (!a) return; const p = byId(a.dataset.route); if (!p) return; e.preventDefault(); routePick(p); });
 function pickPhoto(id) {
   (async () => { if (!(await requireLogin())) return; const p = byId(id);
@@ -940,7 +945,7 @@ document.addEventListener('cloud-status', async e => { const st = e.detail || {}
     const n = st.strikes || 0, seen = LS.get('lm-strikes-seen', 0), ban = st.banned || '', banSeen = LS.get('lm-ban-seen', ''), until = ban === 'forever' ? '기한 없이' : ban + '까지';
     if (n !== seen) LS.set('lm-strikes-seen', n); if (ban !== banSeen) LS.set('lm-ban-seen', ban);
     if (n > seen || (ban && ban !== banSeen)) { const t = n > seen ? `올린 내용이 운영 정책에 맞지 않아 삭제되었어요. 지금까지 경고 ${n}회예요.` : '';
-      ask({ title: ban ? '사진·가이드 올리기가 정지되었어요' : '경고를 받았어요', text: `${t}${t ? ' ' : ''}${ban ? `${until} 사진과 가이드를 올릴 수 없어요. 도장 찍기와 보기는 그대로 돼요.` : '경고 2회는 7일 올리기 정지, 3회는 영구 정지예요.'}`, yes: '확인', no: '이용약관 보기' }).then(v => { if (v === false) window.open('legal/terms.html', '_blank'); }); } }
+      ask({ title: ban ? '사진·가이드 올리기가 정지되었어요' : '경고를 받았어요', text: `${t}${t ? ' ' : ''}${ban ? `${until} 사진과 가이드를 올릴 수 없어요. 도장 찍기와 보기는 그대로 돼요.` : '경고 2회는 7일 올리기 정지, 3회는 영구 정지예요.'}`, yes: '확인', no: '이용약관 보기' }).then(v => { if (v === false) openDoc('legal/terms.html', '이용약관'); }); } }
   if (st.deleting && !st.blocked && !delAsked) { delAsked = true;
     if (await ask({ title: '탈퇴 처리 중인 계정이에요', text: `${st.deleting}에 완전히 지워질 예정이에요. 탈퇴를 취소하고 계속 쓸까요?`, yes: '탈퇴 취소', no: '로그아웃' })) { toast(await window.Cloud.cancelDelete() ? '탈퇴를 취소했어요. 도장 기록을 되찾는 중이에요' : '취소하지 못했어요. 다시 시도해 주세요'); } else { await window.Cloud.signOut(); toast('로그아웃했어요'); } delAsked = false; } });
 document.addEventListener('cloud-login-failed', () => toast('로그인하지 못했어요. 다시 시도해 주세요'));

@@ -28,10 +28,12 @@
   const CapN = window.Capacitor, NATIVE = !!(CapN && CapN.isNativePlatform && CapN.isNativePlatform()), NP = NATIVE ? CapN.Plugins : {}, APP_URL = 'kr.landmarkstamp.app://auth';
   const sb = on && window.supabase ? window.supabase.createClient(url, key, NATIVE ? { auth: { detectSessionInUrl: false } } : undefined) : null;
   /* 앱: 로그인하고 돌아온 주소에서 로그인 정보를 받는다 */
-  if (sb && NATIVE && NP.App) NP.App.addListener('appUrlOpen', async ev => { const u = String(ev && ev.url || ''); if (!u.startsWith(APP_URL)) return; try { NP.Browser && await NP.Browser.close(); } catch (e) {}
+  const onAppUrl = async ev => { const u = String(ev && ev.url || ''); if (!u.startsWith(APP_URL) || onAppUrl.last === u) return; onAppUrl.last = u; try { NP.Browser && await NP.Browser.close(); } catch (e) {}
     try { const q = new URL(u.replace('kr.landmarkstamp.app://', 'https://app.local/')), h = new URLSearchParams(q.hash.slice(1)), code = q.searchParams.get('code');
       if (code) await sb.auth.exchangeCodeForSession(code); else if (h.get('access_token')) await sb.auth.setSession({ access_token: h.get('access_token'), refresh_token: h.get('refresh_token') });
-      else document.dispatchEvent(new CustomEvent('cloud-login-failed', { detail: q.searchParams.get('error_description') || h.get('error_description') || '' })); } catch (e) { document.dispatchEvent(new CustomEvent('cloud-login-failed', { detail: String(e && e.message || e) })); } }); let session = null, storeRef = null, syncing = false;
+      else document.dispatchEvent(new CustomEvent('cloud-login-failed', { detail: q.searchParams.get('error_description') || h.get('error_description') || '' })); } catch (e) { document.dispatchEvent(new CustomEvent('cloud-login-failed', { detail: String(e && e.message || e) })); } };
+  /* 로그인하는 사이 앱이 꺼졌다가 그 주소로 다시 켜진 경우도 받는다 */
+  if (sb && NATIVE && NP.App) { NP.App.addListener('appUrlOpen', onAppUrl); try { NP.App.getLaunchUrl().then(r => { if (r && r.url) onAppUrl(r); }).catch(() => {}); } catch (e) {} } let session = null, storeRef = null, syncing = false;
   const uid = () => session && session.user ? session.user.id : null;
   sbRef = () => sb; uidRef = uid;
   const q = () => get('lm-syncq', []); const qPush = op => { const l = q(); l.push(op); set('lm-syncq', l.slice(-500)); };
@@ -76,6 +78,7 @@
       sb.from('photos').select('id,place_id,user_id,nickname,url,path,like_count,created_at').order('like_count', { ascending: false }).order('created_at', { ascending: false }).limit(3000),
       sb.from('guides').select('id,user_id,nickname,title,data,like_count,completions,created_at').order('like_count', { ascending: false }).limit(1000)]);
     if (!ph.error) rphotos = (ph.data || []).map(mapPhoto); if (!gd.error) rguides = (gd.data || []).map(mapGuide);
+    if (!ph.error && uid() && storeRef && storeRef.dropRemoved && (ph.data || []).length < 3000) { try { await storeRef.dropRemoved(new Set(rphotos.map(x => x.rid))); } catch (e) {} }
     if (uid()) { const [a, b] = await Promise.all([sb.from('photo_likes').select('photo_id').eq('user_id', uid()), sb.from('guide_likes').select('guide_id').eq('user_id', uid())]);
       if (!a.error) pLikes = new Set((a.data || []).map(x => x.photo_id)); if (!b.error) gLikes = new Set((b.data || []).map(x => x.guide_id)); } else { pLikes = new Set(); gLikes = new Set(); }
     document.dispatchEvent(new CustomEvent('cloud-data'));
