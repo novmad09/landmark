@@ -117,7 +117,7 @@
     ready: !!sb, signedIn: () => !!uid(), email: () => (session && session.user && session.user.email) || '',
     name: () => { const m = session && session.user && session.user.user_metadata; return (m && (m.name || m.full_name)) || ''; },
     signIn: () => sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: location.origin + location.pathname } }),
-    async signOut() { try { await sb.auth.signOut(); } catch (e) {} session = null; document.dispatchEvent(new CustomEvent('cloud-auth')); },
+    async signOut() { try { await sb.auth.signOut({ scope: 'local' }); /* 이 기기만 로그아웃. 다른 폰의 로그인은 그대로 둔다 */ } catch (e) {} session = null; document.dispatchEvent(new CustomEvent('cloud-auth')); },
     /* 도장을 찍거나 취소했을 때 앱이 알려 준다 */
     stamped() { sync(); }, unstamped(place_id, day) { if (!sb) return; qPush({ op: 'del', place_id, day }); sync(); },
     status: () => status, checkStatus,

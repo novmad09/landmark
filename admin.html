@@ -92,7 +92,7 @@ const gate = html => { root.innerHTML = `<div class="gate"><div class="seal">랜
 const { data: sess } = await sb.auth.getSession(); const me = sess.session && sess.session.user;
 if (!me) { gate(`<p class="note">관리자 구글 계정으로 로그인해 주세요.</p><button class="btn p" id="in">구글로 로그인</button>`); document.getElementById('in').onclick = () => sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: location.origin + location.pathname } }); return; }
 const { data: isAdmin } = await sb.rpc('is_admin');
-if (!isAdmin) { gate(`<p>이 계정(${esc(me.email)})은 관리자가 아니에요.</p><button class="btn" id="out">로그아웃</button>`); document.getElementById('out').onclick = async () => { await sb.auth.signOut(); location.reload(); }; return; }
+if (!isAdmin) { gate(`<p>이 계정(${esc(me.email)})은 관리자가 아니에요.</p><button class="btn" id="out">로그아웃</button>`); document.getElementById('out').onclick = async () => { await sb.auth.signOut({ scope: 'local' }); location.reload(); }; return; }
 
 const inbox = t => sb.from(t).select('*').order('created_at', { ascending: false }).limit(300);
 async function load() {
@@ -202,7 +202,7 @@ const STRIKE = '올린 사람에게 경고 1회가 쌓여요.\n(2회째 7일 정
 async function act(b, e) { const a = b.dataset.act, id = b.dataset.id, upd = (t, v) => sb.from(t).update(v).eq('id', id); let res, msg = '처리했어요';
   if (a === 'nav') { S.view = id; history.replaceState(null, '', '#' + id); closeUser(); render(); scrollTo(0, 0); return; }
   if (a === 'reload') { b.disabled = true; await load(); toast('새로 불러왔어요'); return; }
-  if (a === 'out') { await sb.auth.signOut(); location.reload(); return; }
+  if (a === 'out') { await sb.auth.signOut({ scope: 'local' }); location.reload(); return; }
   if (a === 'done') { S.showDone = b.checked; render(); return; }
   if (a === 'uf') { S.uf = id; S.more = 200; render(); return; }
   if (a === 'up') { S.up = S.up === id ? '' : id; render(); return; }
@@ -239,7 +239,7 @@ document.addEventListener('change', e => { if (e.target.dataset.act === 'done') 
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeUser(); });
 try { await sb.rpc('admin_sweep'); } catch (e) {} /* 접속 기록 + 기한 지난 탈퇴 계정 정리 */
 let lastAct = Date.now(); ['pointerdown', 'keydown', 'scroll'].forEach(ev => addEventListener(ev, () => { lastAct = Date.now(); }, { passive: true, capture: true }));
-setInterval(async () => { if (Date.now() - lastAct > 30 * 60000) { await sb.auth.signOut(); location.reload(); } }, 30000); /* 30분 동안 손대지 않으면 자동 로그아웃 */
+setInterval(async () => { if (Date.now() - lastAct > 30 * 60000) { await sb.auth.signOut({ scope: 'local' }); location.reload(); } }, 30000); /* 30분 동안 손대지 않으면 자동 로그아웃 */
 await load(); setInterval(() => { if (!document.hidden && !document.querySelector('.sheet,.dlg') && !(document.activeElement && document.activeElement.tagName === 'INPUT')) load(); }, 120000);
 })().catch(e => { document.getElementById('root').innerHTML = `<div class="gate"><p>관리 화면을 열지 못했어요.</p><p class="note">${String(e && e.message || e).replace(/</g, '&lt;')}</p></div>`; });
 </script>
