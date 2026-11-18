@@ -66,6 +66,7 @@ const LmN = isNative && Cap.Plugins ? Cap.Plugins.LmNative || null : null;
 async function galleryFiles(onCount) { let sub = null; try { sub = await LmN.addListener('galleryProgress', e => onCount(e.done, e.total)); } catch (e) {}
   let r; try { r = await LmN.scanGallery(); } catch (e) { return String(e && e.message || e).includes('denied') ? 'denied' : null; } finally { try { sub && sub.remove(); } catch (e) {} }
   const b64 = async (id, size) => { const t = await LmN.thumb({ id, size }); return await (await fetch('data:image/jpeg;base64,' + t.data)).blob(); };
+  galleryFiles.noLoc = r.noLoc || 0; galleryFiles.stopped = !!r.stopped;
   return (r.items || []).map(([id, lat, lng, at, exif, size]) => { const f = new File([], `photo-${id}.jpg`, { type: 'image/jpeg', lastModified: at }); f._key = `ms|${id}|${size}`; f._meta = { gps: { lat, lng }, at, exifDate: !!exif }; f._thumb = sz => b64(id, sz); return f; }); }
 async function memAuto(opts) { opts = opts || {}; if (window.Memory.busy()) return null;
   if (!(await ask(LmN ? { title: '사진첩에서 다녀온 곳을 찾을까요?', text: '사진을 찍은 위치와 날짜만 읽어요. 사진은 폰 밖으로 나가지 않아요. 다음에 나오는 \'사진 접근 허용\'에서 \'모두 허용\'을 눌러 주세요.', yes: '찾아보기', no: '취소' } : { title: '사진 폴더를 골라 주세요', text: '다음 화면에서 사진이 들어 있는 폴더(보통 DCIM 안의 Camera)를 열고 \'이 폴더 사용\'을 눌러 주세요. 처음 한 번만 물어봐요.', yes: '폴더 고르기', no: '취소' }))) return null;
@@ -80,6 +81,7 @@ async function memAuto(opts) { opts = opts || {}; if (window.Memory.busy()) retu
   const prog = (i, n) => { el.querySelector('.bar i').style.width = `${Math.round(i / n * 100)}%`; N(`${i.toLocaleString()} / ${n.toLocaleString()}`); };
   let s; try { s = await window.Memory.scan(files, prog, ctl); } catch (e) { el.remove(); toast('사진을 읽지 못했어요'); return null; }
   const ids = Object.keys(s.places).sort((a, b) => s.places[b] - s.places[a]), nNew = ids.filter(id => !window.Memory.of(id) && !allSeen()[id]).length;
+  if (LmN) { s.noLoc += galleryFiles.noLoc || 0; if (galleryFiles.stopped) s.stopped = true; } /* 앱: 위치 없는 사진 수는 사진첩을 읽을 때 이미 셌다 */
   if (!s.files.length) { el.remove(); window.Memory.clearScan(); memResult({ added: 0, skipped: s.known, matched: 0, loose: 0, noLoc: s.noLoc, places: 0 }, opts); return null; }
   /* 준비 끝: 아직 아무것도 저장하지 않았다. 확인을 눌러야 지도에 찍힌다 */
   const ok = await new Promise(res => { const b = el.querySelector('.box'); el.classList.remove('memprog'); el.classList.add('memready');
