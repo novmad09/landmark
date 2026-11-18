@@ -81,11 +81,12 @@ begin
 end $$;
 revoke all on function _purge_user(uuid), purge_deleted() from public, anon, authenticated;
 
+-- (구글 실명이 공개 닉네임이 되지 않게 기본 이름은 '여행자'. 앱이 첫 도장 때 별명을 지어 올린다)
 -- 새로 가입할 때: 프로필 만들기 + 정지 중 탈퇴했던 계정이면 정지를 잇는다
 create or replace function handle_new_user() returns trigger language plpgsql security definer set search_path = public as $$
 declare b timestamptz; k timestamptz;
 begin
-  insert into profiles (id, nickname) values (new.id, left(coalesce(new.raw_user_meta_data->>'nickname', new.raw_user_meta_data->>'name', new.raw_user_meta_data->>'full_name', '여행자'), 20)) on conflict do nothing;
+  insert into profiles (id, nickname) values (new.id, left(coalesce(new.raw_user_meta_data->>'nickname', '여행자'), 20)) on conflict do nothing;
   begin
     select max(banned_until), max(blocked_until) into b, k from blocklist where key in (
       encode(sha256(convert_to('e:' || lower(coalesce(new.email, '')), 'UTF8')), 'hex'),
@@ -195,8 +196,8 @@ begin
     v := gen_random_uuid(); prov := (array['google','kakao','apple'])[1 + floor(random() * 3)::int]; t := now() - random() * interval '30 days';
     insert into auth.users (id, instance_id, aud, role, email, raw_app_meta_data, raw_user_meta_data, created_at, updated_at, last_sign_in_at)
       values (v, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'dummy-' || substr(v::text, 1, 8) || '@test.invalid',
-        jsonb_build_object('provider', prov, 'providers', jsonb_build_array(prov)), jsonb_build_object('name', names[1 + floor(random() * 12)::int] || (10 + floor(random() * 90)::int), 'sub', 'dummy-' || v), t, now(), t + random() * (now() - t));
-    update profiles set created_at = t where id = v;
+        jsonb_build_object('provider', prov, 'providers', jsonb_build_array(prov)), jsonb_build_object('sub', 'dummy-' || v), t, now(), t + random() * (now() - t));
+    update profiles set created_at = t, nickname = names[1 + floor(random() * 12)::int] || (10 + floor(random() * 90)::int) where id = v;
     insert into stamps (user_id, place_id, day, kind) select v, x.p, d - floor(random() * 20)::int, case when random() < 0.8 then 'gps' else 'photo' end
       from (select p from unnest(p_places) p order by random() limit floor(random() * 12)::int) x on conflict do nothing;
     insert into visits (day, device, user_id, app_version) select d - g, 'dummy-' || substr(v::text, 1, 12), v, '0.55' from generate_series(0, 13) g where random() < 0.4 on conflict do nothing;

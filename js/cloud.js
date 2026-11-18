@@ -54,7 +54,9 @@
     const rows = localRows(); for (let i = 0; i < rows.length; i += 400) { const { error } = await sb.from('stamps').upsert(rows.slice(i, i + 400), { onConflict: 'user_id,place_id,day,kind', ignoreDuplicates: true }); if (error) throw error; }
     const { data, error } = await sb.from('stamps').select('place_id,day,kind').eq('user_id', uid()).limit(20000); if (error) throw error;
     changed = mergeDown(data || []); set('lm-synced-at', new Date().toISOString());
-    { const u = get('lm-user', null); if (u && u.nickname) await sb.from('profiles').update({ nickname: String(u.nickname).slice(0, 20) }).eq('id', uid()); }
+    { const u = get('lm-user', null); if (u && u.nickname) await sb.from('profiles').update({ nickname: String(u.nickname).slice(0, 20) }).eq('id', uid());
+      else if (storeRef && storeRef.signIn && !storeRef.user) { /* 새 폰·다시 설치: 서버에 있던 이름을 그대로 쓴다 (기본 이름이면 첫 도장 때 새로 짓는다) */
+        const { data } = await sb.from('profiles').select('nickname').eq('id', uid()).maybeSingle(); if (data && data.nickname && data.nickname !== '여행자') { await storeRef.signIn(data.nickname); changed = true; } } }
   } catch (e) { console.warn('[cloud] sync', e && e.message); } finally { syncing = false; }
     if (changed) document.dispatchEvent(new CustomEvent('cloud-sync')); return changed; }
   /* ───── 3단계: 명소 사진·가이드 함께 보기 ─────

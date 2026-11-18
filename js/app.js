@@ -146,7 +146,7 @@ const Back = (() => {
   /* 처음 화면을 만질 때 덫을 놓는다 (만진 뒤에 만든 칸이어야 뒤로 가기가 건너뛰지 않는다) */
   ['pointerdown', 'keydown', 'touchstart'].forEach(ev => addEventListener(ev, () => { if (!made || (!onTrap && Date.now() > exitUntil)) arm(); }, { capture: true, passive: true }));
   let exitUntil = 0;
-  window.addEventListener('popstate', () => { if (ignore > 0) { ignore--; return; } onTrap = false;
+  window.addEventListener('popstate', () => { if (ignore > 0) { ignore--; return; } if (!made) return; /* 아직 덫을 놓기 전(예: 로그인하고 돌아온 직후 주소 정리)에는 뒤로 가기가 아니다 */ onTrap = false;
     if (closeTop()) return arm(); if (tab() !== 'map') { showTab('map'); return arm(); }
     /* 맨 바깥(지도)에서 뒤로: 바로 닫지 않고 한 번 더 누르면 닫힌다 */
     exitUntil = Date.now() + 2200; toast('한 번 더 누르면 앱이 닫혀요'); setTimeout(() => { if (!onTrap) arm(); }, 2300); });
