@@ -43,6 +43,13 @@
         </provider>
     </application>
 
+    <!-- 길찾기: 어떤 지도 앱이 깔려 있는지 확인 -->
+    <queries>
+        <package android:name="com.nhn.android.nmap" />
+        <package android:name="com.google.android.apps.maps" />
+        <package android:name="net.daum.android.map" />
+    </queries>
+
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />

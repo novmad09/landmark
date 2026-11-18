@@ -196,13 +196,28 @@ public class LmNativePlugin extends Plugin {
         }).start();
     }
 
+    private boolean installed(String pkg) {
+        try { getContext().getPackageManager().getPackageInfo(pkg, 0); return true; } catch (Exception e) { return false; }
+    }
+
+    /** 폰에 깔린 지도 앱 (길찾기에서 없는 앱은 권하지 않으려고) */
+    @PluginMethod
+    public void mapApps(PluginCall call) {
+        JSObject r = new JSObject();
+        r.put("naver", installed("com.nhn.android.nmap"));
+        r.put("google", installed("com.google.android.apps.maps"));
+        r.put("kakao", installed("net.daum.android.map"));
+        call.resolve(r);
+    }
+
     @PluginMethod
     public void openApp(PluginCall call) {
-        String url = call.getString("url"), fb = call.getString("fallback");
-        if (url == null || !(url.startsWith("nmap://") || url.startsWith("https://"))) { call.reject("bad url"); return; }
+        String url = call.getString("url"), fb = call.getString("fallback"), pkg = call.getString("pkg");
+        if (url == null || !(url.startsWith("nmap://") || url.startsWith("kakaomap://") || url.startsWith("https://"))) { call.reject("bad url"); return; }
         try {
             Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            if ("com.google.android.apps.maps".equals(pkg) || "net.daum.android.map".equals(pkg) || "com.nhn.android.nmap".equals(pkg)) i.setPackage(pkg);
             getContext().startActivity(i);
             call.resolve();
         } catch (Exception e) {
