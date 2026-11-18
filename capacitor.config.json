@@ -1,0 +1,21 @@
+{
+  "appId": "kr.landmarkstamp.app",
+  "appName": "랜드마크",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  },
+  "ios": {
+    "contentInset": "never"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 500,
+      "backgroundColor": "#F4F1EA",
+      "androidScaleType": "CENTER_CROP"
+    }
+  },
+  "android": {
+    "allowMixedContent": false
+  }
+}

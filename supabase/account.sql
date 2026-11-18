@@ -1,0 +1,226 @@
+-- 랜드마크 · 계정 관리: 앱 이용 정지 / 탈퇴(7일 보관 뒤 완전 삭제) / 재가입 악용 방지 / 처리 기록. 여러 번 실행해도 안전하다.
+-- 운영자만 아는 계정 상태 (남들은 못 본다: 정책을 두지 않고 함수로만 읽고 쓴다)
+create table if not exists account_state (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  blocked_until timestamptz,                 -- 이 시각까지 앱 이용 정지 (서버에 아무것도 올릴 수 없다)
+  deleted_at timestamptz,                    -- 탈퇴한 시각. 7일 뒤 완전 삭제
+  note text check (char_length(note) <= 1000)
+);
+alter table account_state enable row level security;
+create table if not exists admin_log (
+  id bigint generated always as identity primary key,
+  user_id uuid, actor uuid, action text not null, detail text, created_at timestamptz not null default now()
+);
+create index if not exists admin_log_user_idx on admin_log(user_id, created_at desc);
+alter table admin_log enable row level security;
+drop policy if exists "admin all" on admin_log;
+create policy "admin all" on admin_log for all using (is_admin()) with check (is_admin());
+-- 정지 중에 탈퇴한 계정이 다시 가입해도 정지가 이어지게: 이메일·계정 번호를 알아볼 수 없게 바꾼 값만 남긴다
+create table if not exists blocklist (key text primary key, banned_until timestamptz, blocked_until timestamptz, created_at timestamptz not null default now());
+alter table blocklist enable row level security;
+
+create or replace function is_blocked() returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from account_state where user_id = auth.uid() and blocked_until > now()) $$;
+grant execute on function is_blocked() to anon, authenticated;
+do $$ declare t text; begin
+  foreach t in array array['stamps','photos','guides','photo_likes','guide_likes'] loop
+    execute format('drop policy if exists "not blocked" on %I', t);
+    execute format('create policy "not blocked" on %I as restrictive for insert with check (not is_blocked())', t);
+  end loop; end $$;
+
+create or replace function _fmt_until(t timestamptz) returns text language sql stable as $$
+  select case when t = 'infinity' then 'forever' when t > now() then to_char(t at time zone 'Asia/Seoul', 'YYYY-MM-DD HH24:MI') end $$;
+
+-- 앱이 로그인 직후 묻는다: 정지됐는지, 탈퇴 처리 중인지
+create or replace function my_status() returns jsonb language sql stable security definer set search_path = public as $$
+  select jsonb_build_object(
+    'blocked', (select _fmt_until(a.blocked_until) from account_state a where a.user_id = auth.uid()),
+    'banned', (select _fmt_until(p.banned_until) from profiles p where p.id = auth.uid()),
+    'strikes', (select p.strikes from profiles p where p.id = auth.uid()),
+    'deleting', (select to_char((a.deleted_at + interval '7 days') at time zone 'Asia/Seoul', 'YYYY-MM-DD HH24:MI') from account_state a where a.user_id = auth.uid() and a.deleted_at is not null)) $$;
+revoke all on function my_status() from public, anon; grant execute on function my_status() to authenticated;
+
+-- 탈퇴: 올린 사진·가이드는 바로 지우고(파일은 앱이 먼저 지운다) 계정과 도장 기록은 7일 보관
+create or replace function request_delete() returns void language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is null then raise exception 'not signed in'; end if;
+  delete from photos where user_id = auth.uid(); delete from guides where user_id = auth.uid();
+  insert into account_state (user_id, deleted_at) values (auth.uid(), now()) on conflict (user_id) do update set deleted_at = now();
+  insert into admin_log (user_id, actor, action) values (auth.uid(), auth.uid(), 'withdraw_self');
+end $$;
+create or replace function cancel_delete() returns void language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is null then raise exception 'not signed in'; end if;
+  update account_state set deleted_at = null where user_id = auth.uid() and deleted_at is not null;
+  if found then insert into admin_log (user_id, actor, action) values (auth.uid(), auth.uid(), 'withdraw_cancel_self'); end if;
+end $$;
+revoke all on function request_delete(), cancel_delete() from public, anon; grant execute on function request_delete(), cancel_delete() to authenticated;
+
+-- 완전 삭제 (내부용). 정지 중이었다면 재가입 방지 기록만 남긴다
+create or replace function _purge_user(p_id uuid) returns void language plpgsql security definer set search_path = public as $$
+declare u auth.users%rowtype; b timestamptz; k timestamptz;
+begin
+  select * into u from auth.users where id = p_id; if not found then return; end if;
+  select banned_until into b from profiles where id = p_id; select blocked_until into k from account_state where user_id = p_id;
+  if b > now() or k > now() then
+    insert into blocklist (key, banned_until, blocked_until)
+      select encode(sha256(convert_to(x, 'UTF8')), 'hex'), b, k from unnest(array[
+        case when u.email is not null and u.email <> '' then 'e:' || lower(u.email) end,
+        case when coalesce(u.raw_user_meta_data->>'sub', u.raw_user_meta_data->>'provider_id', '') <> '' then 'p:' || coalesce(u.raw_app_meta_data->>'provider', '') || ':' || coalesce(u.raw_user_meta_data->>'sub', u.raw_user_meta_data->>'provider_id') end]) x where x is not null
+    on conflict (key) do update set banned_until = excluded.banned_until, blocked_until = excluded.blocked_until;
+  end if;
+  update visits set user_id = null where user_id = p_id;
+  delete from auth.users where id = p_id;
+end $$;
+create or replace function purge_deleted() returns int language plpgsql security definer set search_path = public as $$
+declare r record; n int := 0;
+begin
+  for r in select user_id from account_state where deleted_at < now() - interval '7 days' loop
+    perform _purge_user(r.user_id); insert into admin_log (user_id, action, detail) values (r.user_id, 'purged', '탈퇴 7일 경과'); n := n + 1;
+  end loop; return n;
+end $$;
+revoke all on function _purge_user(uuid), purge_deleted() from public, anon, authenticated;
+
+-- (구글 실명이 공개 닉네임이 되지 않게 기본 이름은 '여행자'. 앱이 첫 도장 때 별명을 지어 올린다)
+-- 새로 가입할 때: 프로필 만들기 + 정지 중 탈퇴했던 계정이면 정지를 잇는다
+create or replace function handle_new_user() returns trigger language plpgsql security definer set search_path = public as $$
+declare b timestamptz; k timestamptz;
+begin
+  insert into profiles (id, nickname) values (new.id, left(coalesce(new.raw_user_meta_data->>'nickname', '여행자'), 20)) on conflict do nothing;
+  begin
+    select max(banned_until), max(blocked_until) into b, k from blocklist where key in (
+      encode(sha256(convert_to('e:' || lower(coalesce(new.email, '')), 'UTF8')), 'hex'),
+      encode(sha256(convert_to('p:' || coalesce(new.raw_app_meta_data->>'provider', '') || ':' || coalesce(new.raw_user_meta_data->>'sub', new.raw_user_meta_data->>'provider_id', ''), 'UTF8')), 'hex'));
+    if b > now() then update profiles set banned_until = b where id = new.id; end if;
+    if k > now() then insert into account_state (user_id, blocked_until) values (new.id, k) on conflict (user_id) do update set blocked_until = excluded.blocked_until; end if;
+  exception when others then null; end;
+  return new;
+end $$;
+
+-- ───────── 관리자 ─────────
+drop function if exists admin_ban(uuid, int, boolean);
+-- p_days: null=그대로, 0=정지 모두 풀기, 음수=영구, 양수=그 날수. p_full: 앱 이용 정지(올리기 정지 포함)
+create or replace function admin_ban(p_id uuid, p_days int default null, p_reset boolean default false, p_full boolean default false, p_reason text default null) returns void language plpgsql security definer set search_path = public as $$
+declare t timestamptz := case when p_days is null or p_days = 0 then null when p_days < 0 then 'infinity'::timestamptz else now() + make_interval(days => p_days) end;
+begin
+  if not is_admin() then raise exception 'admin only'; end if;
+  if p_days = 0 then
+    update profiles set banned_until = null where id = p_id; update account_state set blocked_until = null where user_id = p_id;
+    insert into admin_log (user_id, actor, action, detail) values (p_id, auth.uid(), 'unban', p_reason);
+  elsif p_days is not null then
+    update profiles set banned_until = t where id = p_id;
+    if p_full then insert into account_state (user_id, blocked_until) values (p_id, t) on conflict (user_id) do update set blocked_until = excluded.blocked_until;
+    else update account_state set blocked_until = null where user_id = p_id; end if;
+    insert into admin_log (user_id, actor, action, detail) values (p_id, auth.uid(), case when p_full then 'block' else 'ban_upload' end, concat_ws(' · ', case when p_days < 0 then '영구' else p_days || '일' end, nullif(p_reason, '')));
+  end if;
+  if p_reset then update profiles set strikes = 0 where id = p_id; insert into admin_log (user_id, actor, action) values (p_id, auth.uid(), 'strike_reset'); end if;
+end $$;
+create or replace function admin_note(p_id uuid, p_note text) returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not is_admin() then raise exception 'admin only'; end if;
+  insert into account_state (user_id, note) values (p_id, nullif(left(p_note, 1000), '')) on conflict (user_id) do update set note = excluded.note;
+end $$;
+-- 대신 탈퇴 처리 (사진 파일은 관리 화면이 먼저 지운다) / 탈퇴 취소 / 기다리지 않고 완전 삭제
+create or replace function admin_withdraw(p_id uuid) returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not is_admin() then raise exception 'admin only'; end if;
+  if exists (select 1 from admins where user_id = p_id) then raise exception '관리자 계정은 탈퇴시킬 수 없어요'; end if;
+  delete from photos where user_id = p_id; delete from guides where user_id = p_id;
+  insert into account_state (user_id, deleted_at) values (p_id, now()) on conflict (user_id) do update set deleted_at = now();
+  insert into admin_log (user_id, actor, action) values (p_id, auth.uid(), 'withdraw_admin');
+end $$;
+create or replace function admin_restore(p_id uuid) returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not is_admin() then raise exception 'admin only'; end if;
+  update account_state set deleted_at = null where user_id = p_id;
+  insert into admin_log (user_id, actor, action) values (p_id, auth.uid(), 'withdraw_cancel_admin');
+end $$;
+create or replace function admin_purge(p_id uuid) returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not is_admin() then raise exception 'admin only'; end if;
+  if not exists (select 1 from account_state where user_id = p_id and deleted_at is not null) then raise exception '탈퇴 처리된 계정만 완전 삭제할 수 있어요'; end if;
+  perform _purge_user(p_id); insert into admin_log (user_id, actor, action, detail) values (p_id, auth.uid(), 'purged', '관리자가 바로 삭제');
+end $$;
+-- 관리 화면을 열 때마다: 접속 기록을 남기고, 기한 지난 탈퇴 계정을 정리한다 (매일 자동 정리의 보조)
+create or replace function admin_sweep() returns int language plpgsql security definer set search_path = public as $$
+begin if not is_admin() then raise exception 'admin only'; end if; insert into admin_log (actor, action) values (auth.uid(), 'admin_open'); return purge_deleted(); end $$;
+grant execute on function admin_ban(uuid, int, boolean, boolean, text), admin_note(uuid, text), admin_withdraw(uuid), admin_restore(uuid), admin_purge(uuid), admin_sweep() to authenticated;
+
+create or replace function admin_users() returns jsonb language plpgsql security definer set search_path = public as $$
+declare r jsonb;
+begin
+  if not is_admin() then raise exception 'admin only'; end if;
+  select coalesce(jsonb_agg(to_jsonb(x) order by x.created_at desc), '[]'::jsonb) into r from (
+    select p.id, p.nickname, u.email, p.strikes, p.created_at, u.last_sign_in_at,
+      coalesce(u.raw_app_meta_data->'providers', jsonb_build_array(coalesce(u.raw_app_meta_data->>'provider', '?'))) as providers,
+      _fmt_until(p.banned_until) as ban, _fmt_until(a.blocked_until) as blocked,
+      to_char((a.deleted_at + interval '7 days') at time zone 'Asia/Seoul', 'YYYY-MM-DD HH24:MI') as deleting, a.note,
+      (select max(v.day) from visits v where v.user_id = p.id) as last_day,
+      (select count(*) from visits v where v.user_id = p.id and v.day > (now() at time zone 'Asia/Seoul')::date - 30) as days30,
+      (select count(*) from stamps s where s.user_id = p.id) as stamps,
+      (select count(*) from photos ph where ph.user_id = p.id) as photos,
+      (select count(*) from guides g where g.user_id = p.id) as guides,
+      exists (select 1 from admins ad where ad.user_id = p.id) as admin
+    from profiles p left join auth.users u on u.id = p.id left join account_state a on a.user_id = p.id order by p.created_at desc limit 5000) x;
+  return r;
+end $$;
+grant execute on function admin_users() to authenticated;
+
+create or replace function admin_resolve(p_type text, p_id text, p_remove boolean) returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_user uuid; v_path text; v_strikes int;
+begin
+  if not is_admin() then raise exception 'admin only'; end if;
+  if p_type = 'photo' then
+    select user_id, path into v_user, v_path from photos where id = p_id::bigint;
+    if p_remove then delete from photos where id = p_id::bigint; else update photos set hidden = false, report_count = 0 where id = p_id::bigint; end if;
+  elsif p_type = 'guide' then
+    select user_id into v_user from guides where id = p_id;
+    if p_remove then delete from guides where id = p_id; else update guides set hidden = false, report_count = 0 where id = p_id; end if;
+  end if;
+  update reports set status = case when p_remove then 'removed' else 'kept' end where target_type = p_type and target_id = p_id and status = 'wait';
+  if p_remove and v_user is not null then
+    update profiles set strikes = strikes + 1, banned_until = case when strikes + 1 >= 3 then 'infinity'::timestamptz when strikes + 1 = 2 then greatest(coalesce(banned_until, now()), now() + interval '7 days') else banned_until end where id = v_user returning strikes into v_strikes;
+    insert into admin_log (user_id, actor, action, detail) values (v_user, auth.uid(), 'strike', case p_type when 'photo' then '사진' else '가이드' end || ' 삭제 · 경고 ' || v_strikes || '회');
+  end if;
+  return jsonb_build_object('path', v_path, 'strikes', v_strikes);
+end $$;
+
+-- ───────── 테스트용 더미 계정 (로그인할 수 없는 가짜 계정. 이메일이 dummy-…@test.invalid) ─────────
+create or replace function admin_dummy_add(p_n int default 5, p_places text[] default '{}') returns int language plpgsql security definer set search_path = public as $$
+declare v uuid; prov text; t timestamptz; d date := (now() at time zone 'Asia/Seoul')::date;
+  names text[] := array['산책러','도장왕','여행자','바다좋아','산타는곰','골목탐험','기차여행','한옥덕후','노을수집가','캠핑러','등산초보','성곽걷기'];
+begin
+  if not is_admin() then raise exception 'admin only'; end if;
+  p_n := least(greatest(coalesce(p_n, 5), 1), 50);
+  for i in 1..p_n loop
+    v := gen_random_uuid(); prov := (array['google','kakao','apple'])[1 + floor(random() * 3)::int]; t := now() - random() * interval '30 days';
+    insert into auth.users (id, instance_id, aud, role, email, raw_app_meta_data, raw_user_meta_data, created_at, updated_at, last_sign_in_at)
+      values (v, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'dummy-' || substr(v::text, 1, 8) || '@test.invalid',
+        jsonb_build_object('provider', prov, 'providers', jsonb_build_array(prov)), jsonb_build_object('sub', 'dummy-' || v), t, now(), t + random() * (now() - t));
+    update profiles set created_at = t, nickname = names[1 + floor(random() * 12)::int] || (10 + floor(random() * 90)::int) where id = v;
+    insert into stamps (user_id, place_id, day, kind) select v, x.p, d - floor(random() * 20)::int, case when random() < 0.8 then 'gps' else 'photo' end
+      from (select p from unnest(p_places) p order by random() limit floor(random() * 12)::int) x on conflict do nothing;
+    insert into visits (day, device, user_id, app_version) select d - g, 'dummy-' || substr(v::text, 1, 12), v, '0.55' from generate_series(0, 13) g where random() < 0.4 on conflict do nothing;
+  end loop;
+  return p_n;
+end $$;
+create or replace function admin_dummy_clear() returns int language plpgsql security definer set search_path = public as $$
+declare n int;
+begin
+  if not is_admin() then raise exception 'admin only'; end if;
+  delete from admin_log where user_id in (select id from auth.users where email like 'dummy-%@test.invalid');
+  delete from visits where device like 'dummy-%';
+  delete from auth.users where email like 'dummy-%@test.invalid'; get diagnostics n = row_count;
+  return n;
+end $$;
+grant execute on function admin_dummy_add(int, text[]), admin_dummy_clear() to authenticated;
+
+-- 신고 누적으로 먼저 가리기: 로그인한 서로 다른 사람 3명부터 (기기 번호는 꾸밀 수 있어서, 비로그인 신고는 운영자 검토로만 간다)
+create or replace function on_report() returns trigger language plpgsql security definer set search_path = public as $$
+declare v_n int; v_u int;
+begin
+  select count(distinct coalesce(user_id::text, device)), count(distinct user_id) into v_n, v_u from reports where target_type = new.target_type and target_id = new.target_id;
+  if new.target_type = 'photo' and new.target_id ~ '^[0-9]+$' then update photos set report_count = v_n, hidden = hidden or v_u >= 3 where id = new.target_id::bigint;
+  elsif new.target_type = 'guide' then update guides set report_count = v_n, hidden = hidden or v_u >= 3 where id = new.target_id; end if;
+  return new;
+end $$;
