@@ -24,9 +24,20 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+        // 출시용 서명. 키 파일과 암호는 저장소에 두지 않고 빌드할 때 환경 변수로만 받는다
+        release {
+            def ks = System.getenv("LM_KEYSTORE")
+            if (ks) {
+                storeFile file(ks)
+                storePassword System.getenv("LM_KEYSTORE_PASS")
+                keyAlias System.getenv("LM_KEY_ALIAS")
+                keyPassword System.getenv("LM_KEY_PASS")
+            }
+        }
     }
     buildTypes {
         release {
+            if (System.getenv("LM_KEYSTORE")) signingConfig signingConfigs.release
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
