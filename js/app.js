@@ -112,7 +112,7 @@ function memResult(r, opts) {
   const el = document.createElement('div'); el.className = 'login memres';
   el.innerHTML = `<div class="box"><h2>${none ? (r.skipped && !r.added ? '이미 다 불러온 사진이에요' : '위치가 담긴 사진을 못 찾았어요') : total ? `추억 명소 ${total}곳을 찾았어요!` : '사진을 지도에 올렸어요'}</h2>
     ${none ? `<p>${r.skipped && !r.added ? '새 사진만 더해져요. 이전 기록은 그대로예요.' : (LmN ? '사진에 찍은 위치가 남아 있어야 다녀온 곳을 찾을 수 있어요.' : '사진에 위치가 없거나, 고르는 화면이 위치를 빼고 줬을 수 있어요. \'파일에서 고르기\'로 다시 해 보세요.')}</p>${r.noLoc ? `<p class="note">위치 없는 사진 ${r.noLoc.toLocaleString()}장은 넣지 못했어요. 카메라 설정에서 <b>위치 태그</b>를 켜 두면 앞으로 찍는 사진은 자동으로 찾아져요. 지금 있는 사진은 명소 화면의 \'사진 남기기\'로 직접 넣을 수 있어요.</p>` : ''}` : `<ul class="memsum"><li>명소 <b>${r.places}</b>곳 · 사진 <b>${r.matched}</b>장</li>${r.loose ? `<li>다른 곳 사진 <b>${r.loose}</b>장 · 지도에 분홍 점</li>` : ''}${r.noLoc ? `<li>위치 없는 사진 ${r.noLoc.toLocaleString()}장은 넣지 못했어요 · 카메라의 위치 태그를 켜 보세요</li>` : ''}${r.skipped ? `<li>이미 있는 사진 ${r.skipped}장은 그대로</li>` : ''}</ul>`}
-    <p class="note">사진은 언제든 더할 수 있어요. 이전 기록은 그대로 남아요.</p>
+    ${none && r.skipped && !r.added ? '' : '<p class="note">사진은 언제든 더할 수 있어요. 이전 기록은 그대로 남아요.</p>'}
     <button class="btn primary" type="button" id="mrOk">${none ? '닫기' : '지도에서 보기'}</button>${none ? '<button class="btn ghost" type="button" id="mrAny">파일에서 고르기</button>' : '<button class="btn ghost" type="button" id="mrMore">사진 더 고르기</button>'}</div>`;
   document.getElementById('app').appendChild(el); const close = () => el.remove();
   el.querySelector('#mrOk').onclick = () => { close(); if (!none) { showTab('map'); document.getElementById('jNat').click(); } };
