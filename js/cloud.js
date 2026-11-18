@@ -25,11 +25,11 @@
   /* ───── 2단계: 구글 로그인 + 도장 백업 ─────
      앱은 지금처럼 폰에 먼저 저장한다(로그인 없이도 다 된다). 로그인하면 도장을 서버에도 올리고,
      다른 폰에서 로그인하면 내려받아 합친다. 지우는 것은 '취소'를 누른 것만 지운다. */
-  const CapN = window.Capacitor, NATIVE = !!(CapN && CapN.isNativePlatform && CapN.isNativePlatform()), NP = NATIVE ? CapN.Plugins : {}, APP_URL = 'kr.landmarkstamp.app://auth';
+  const CapN = window.Capacitor, NATIVE = !!(CapN && CapN.isNativePlatform && CapN.isNativePlatform()), NP = NATIVE ? CapN.Plugins : {}, APP_URL = 'com.weekend.landmark://auth';
   const sb = on && window.supabase ? window.supabase.createClient(url, key, NATIVE ? { auth: { detectSessionInUrl: false } } : undefined) : null;
   /* 앱: 로그인하고 돌아온 주소에서 로그인 정보를 받는다 */
   const onAppUrl = async ev => { const u = String(ev && ev.url || ''); if (!u.startsWith(APP_URL) || onAppUrl.last === u) return; onAppUrl.last = u; try { NP.Browser && await NP.Browser.close(); } catch (e) {}
-    try { const q = new URL(u.replace('kr.landmarkstamp.app://', 'https://app.local/')), h = new URLSearchParams(q.hash.slice(1)), code = q.searchParams.get('code');
+    try { const q = new URL(u.replace('com.weekend.landmark://', 'https://app.local/')), h = new URLSearchParams(q.hash.slice(1)), code = q.searchParams.get('code');
       if (code) await sb.auth.exchangeCodeForSession(code); else if (h.get('access_token')) await sb.auth.setSession({ access_token: h.get('access_token'), refresh_token: h.get('refresh_token') });
       else document.dispatchEvent(new CustomEvent('cloud-login-failed', { detail: q.searchParams.get('error_description') || h.get('error_description') || '' })); } catch (e) { document.dispatchEvent(new CustomEvent('cloud-login-failed', { detail: String(e && e.message || e) })); } };
   /* 로그인하는 사이 앱이 꺼졌다가 그 주소로 다시 켜진 경우도 받는다 */
@@ -127,7 +127,7 @@
   const acct = {
     ready: !!sb, signedIn: () => !!uid(), email: () => (session && session.user && session.user.email) || '',
     name: () => { const m = session && session.user && session.user.user_metadata; return (m && (m.name || m.full_name)) || ''; },
-    /* 웹: 페이지째 다녀온다. 앱: 구글이 앱 안 화면(웹뷰) 로그인을 막으므로 바깥 브라우저 창으로 다녀오고 kr.landmarkstamp.app://auth 로 돌아온다 */
+    /* 웹: 페이지째 다녀온다. 앱: 구글이 앱 안 화면(웹뷰) 로그인을 막으므로 바깥 브라우저 창으로 다녀오고 com.weekend.landmark://auth 로 돌아온다 */
     async signIn(provider) { provider = provider || 'google'; if (!NATIVE) return sb.auth.signInWithOAuth({ provider, options: { redirectTo: location.origin + location.pathname } });
       const { data, error } = await sb.auth.signInWithOAuth({ provider, options: { redirectTo: APP_URL, skipBrowserRedirect: true } }); if (error) throw error; await NP.Browser.open({ url: data.url }); },
     async signOut() { try { await sb.auth.signOut({ scope: 'local' }); /* 이 기기만 로그아웃. 다른 폰의 로그인은 그대로 둔다 */ } catch (e) {} session = null; document.dispatchEvent(new CustomEvent('cloud-auth')); },
