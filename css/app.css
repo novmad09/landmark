@@ -833,3 +833,5 @@ div.pk{display:flex;flex-direction:column;gap:2px;padding:12px 14px;border-radiu
 .docv header{display:flex;align-items:center;justify-content:space-between;padding:8px 8px 8px 18px;border-bottom:1px solid #e3e6ec;color:#1b1f2a;font-size:17px}
 .docv header .x{width:48px;height:48px;border:0;background:none;font-size:28px;color:#1b1f2a;border-radius:50%}
 .docv iframe{flex:1;width:100%;border:0;background:#fff}
+
+@media (prefers-color-scheme: dark){.docv .docbox,.docv iframe{background:#15171C}.docv header{color:#ECEEF2;border-bottom-color:#3a3f4a}.docv header .x{color:#ECEEF2}}
