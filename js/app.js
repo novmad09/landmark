@@ -722,11 +722,18 @@ async function photoOrMemory(id) { if (allSeen()[id]) { pickPhoto(id); return; }
 function routePick(p) { const me = mapS.pos(), nm = encodeURIComponent(p.name.replace(/[·&/]/g, ' ')), and = /Android/i.test(navigator.userAgent);
   const nWeb = mapS.routeUrl(p), nQ = `route/public?${me ? `slat=${me.lat}&slng=${me.lng}&sname=${encodeURIComponent('내 위치')}&` : ''}dlat=${p.lat}&dlng=${p.lng}&dname=${nm}&appname=${encodeURIComponent(location.hostname || 'landmark')}`;
   const naver = and ? `intent://${nQ}#Intent;scheme=nmap;package=com.nhn.android.nmap;S.browser_fallback_url=${encodeURIComponent(nWeb)};end` : nWeb; /* 안드로이드: 네이버 지도 앱을 바로 연다 (없으면 웹) */
-  const google = `https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}&travelmode=transit`;
-  const el = document.createElement('div'); el.className = 'login routepick';
-  el.innerHTML = `<div class="box"><h2>어느 지도로 볼까요?</h2><a class="btn primary" href="${naver}" target="_blank" rel="noopener">네이버 지도</a><a class="btn ghost" href="${google}" target="_blank" rel="noopener">구글 지도</a></div>`;
-  document.getElementById('app').appendChild(el); el.onclick = e => { if (e.target === el || e.target.closest('a')) setTimeout(() => el.remove(), 50); };
-  if (LmN) el.querySelector('a.primary').addEventListener('click', e => { e.preventDefault(); LmN.openApp({ url: 'nmap://' + nQ, fallback: nWeb }).catch(() => {}); }); /* 앱: 네이버 지도 앱을 바로 열고, 없으면 웹으로 */ }
+  const google = `https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}&travelmode=transit`, kakao = `kakaomap://route?${me ? `sp=${me.lat},${me.lng}&` : ''}ep=${p.lat},${p.lng}&by=PUBLICTRANSIT`;
+  const show = opts => { const el = document.createElement('div'); el.className = 'login routepick';
+    el.innerHTML = `<div class="box"><h2>어느 지도로 볼까요?</h2>${opts.map((o, i) => `<a class="btn ${i ? 'ghost' : 'primary'}" href="${o.href}" data-i="${i}" target="_blank" rel="noopener">${o.name}</a>`).join('')}</div>`;
+    document.getElementById('app').appendChild(el); el.onclick = e => { const a = e.target.closest('a'); if (a && opts[+a.dataset.i].go) { e.preventDefault(); opts[+a.dataset.i].go(); } if (e.target === el || a) setTimeout(() => el.remove(), 50); }; };
+  if (!LmN) return show([{ name: '네이버 지도', href: naver }, { name: '구글 지도', href: google }]);
+  /* 앱: 폰에 깔려 있는 지도 앱만 권한다. 하나뿐이면 묻지 않고 바로 연다. 하나도 없으면 네이버 지도 웹 */
+  (async () => { let has = {}; try { has = await LmN.mapApps(); } catch (e) {}
+    const open = (url, pkg) => () => LmN.openApp({ url, pkg, fallback: nWeb }).catch(() => {}); const opts = [];
+    if (has.naver) opts.push({ name: '네이버 지도', href: nWeb, go: open('nmap://' + nQ, 'com.nhn.android.nmap') });
+    if (has.kakao) opts.push({ name: '카카오맵', href: nWeb, go: open(kakao, 'net.daum.android.map') });
+    if (has.google) opts.push({ name: '구글 지도', href: google, go: open(google, 'com.google.android.apps.maps') });
+    if (!opts.length) return LmN.openApp({ url: nWeb }).catch(() => {}); if (opts.length === 1) return opts[0].go(); show(opts); })(); }
 document.addEventListener('click', e => { const a = e.target.closest('a[data-route]'); if (!a) return; const p = byId(a.dataset.route); if (!p) return; e.preventDefault(); routePick(p); });
 function pickPhoto(id) {
   (async () => { if (!(await requireLogin())) return; const p = byId(id);
