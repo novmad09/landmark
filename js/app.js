@@ -690,7 +690,7 @@ function openDetail(id) {
   const old = !cfg.testMode && pos && (!pos.at || Date.now() - pos.at > 120000); /* 지난번에 저장된 위치: 거리 표시에만 쓰고 도장은 못 찍는다 */
   const weak = !cfg.testMode && pos && !old && (pos.accuracy || 0) > cfg.maxAccuracy; /* 지도 시트와 같은 기준: 오차가 크면 잠근다 */
   const okStamp = cfg.testMode || (d !== null && !weak && !old && d - Math.min(pos.accuracy || 0, cfg.maxAccuracy) <= p.r); const today = s && s.last === kstToday();
-  el.innerHTML = `<div class="hero" id="dHero" role="button" tabindex="0" aria-label="사진 크게 보기">${hero ? `<img src="${hero.url}" alt="${p.name}">` : md && md.img ? `<img src="${md.img}" alt="${p.name}" referrerpolicy="no-referrer" onerror="this.remove()">` : ICON[p.cat].replace('<svg ', '<svg class="big" ').replace('stroke-width="1.8"', 'stroke-width="1.2"')}<button class="back" type="button" aria-label="뒤로"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button><span class="credit">${hero ? (hero.mem ? '내 추억 사진' : isMine(hero) ? '내 사진' : `사진 · ${esc(hero.nickname)} · 👍 ${hero.likes}`) : md && md.img ? `사진 · ${md.credit ? md.credit.slice(0, 24) + ' · ' : ''}${md.lic || ''} · 위키미디어` : '대표사진 없음 · 첫 사진을 올려 보세요'}</span>${nPh > 1 ? `<span class="cnt">${nPh}장</span>` : ''}</div>
+  el.innerHTML = `<div class="hero" id="dHero" role="button" tabindex="0" aria-label="사진 크게 보기">${hero ? `<img src="${hero.url}" alt="${p.name}">` : md && md.img ? `<img src="${md.img}" alt="${p.name}" referrerpolicy="no-referrer" onerror="this.remove()">` : ICON[p.cat].replace('<svg ', '<svg class="big" ').replace('stroke-width="1.8"', 'stroke-width="1.2"')}<button class="back" type="button" aria-label="뒤로"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button><span class="credit">${hero ? (hero.mem ? '내 추억 사진' : isMine(hero) ? '내 사진' : `사진 · ${esc(hero.nickname)} · 👍 ${hero.likes}`) : md && md.img ? `사진 · ${md.credit ? esc(md.credit) + (md.credit.length >= 24 ? '…' : '') + ' · ' : ''}${md.lic || ''} · 위키미디어` : '대표사진 없음 · 첫 사진을 올려 보세요'}</span>${nPh > 1 ? `<span class="cnt">${nPh}장</span>` : ''}</div>
   <div class="body">
     <h2>${p.name}</h2>
     ${p.by ? `<p class="foundby">🧭 <b>${esc(p.by)}</b>님이 발견한 곳</p>` : ''}
@@ -754,7 +754,7 @@ function shrink(file, maxEdge) { return new Promise((res, rej) => { const img = 
 function openGallery(placeId, start, order) {
   const p = byId(placeId); const md = (window.MEDIA || {})[placeId]; const cover = store.coverOf(placeId);
   const items = (order || store.photosOf(placeId)).map(ph => ({ ph, url: ph.url, cap: `${esc(ph.nickname)} · ${window.Store.kstDate(ph.createdAt).replaceAll('-', '.')}` }));
-  if (md && md.img && !cover) items.unshift({ url: md.img, cap: `${md.credit ? md.credit.slice(0, 30) + ' · ' : ''}${md.lic || ''} · 위키미디어` });
+  if (md && md.img && !cover) items.unshift({ url: md.img, cap: `${md.credit ? esc(md.credit) + (md.credit.length >= 24 ? '…' : '') + ' · ' : ''}${md.lic || ''} · <a href="${md.src}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">위키미디어 공용에서 원본 보기</a>` });
   if (!order) window.Memory.photosOf(placeId).filter(m => m.thumb).forEach(m => items.push(window.Memory.item(m))); /* 내 추억 사진도 같이 넘겨 본다 */
   if (!items.length) { toast('아직 사진이 없어요'); return; }
   openPhotos(items, start, p.name, p);
