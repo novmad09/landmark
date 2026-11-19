@@ -47,7 +47,7 @@ for (const p of order) {
   let c = (items || []).map(it => ({ it, s: score(it) })).filter(x => x.s > 0);
   if (!c.some(x => x.s >= 2.5 && x.it.firstimage) && !MEDIA[p.id]) {
     const kw = await call('kw', { keyword: parts[0].replace(CITY, ''), arrange: 'O' });
-    if (Array.isArray(kw)) c = c.concat(kw.map(it => ({ it, s: score(it) })).filter(x => x.s > 0 && hv(p.lat, p.lng, +it.mapy, +it.mapx) < 8000));
+    if (Array.isArray(kw)) c = c.concat(kw.map(it => ({ it, s: score(it) })).filter(x => x.s > 0 && hv(p.lat, p.lng, +x.it.mapy, +x.it.mapx) < 8000));
   }
   c.forEach(x => { x.d = Math.round(hv(p.lat, p.lng, +x.it.mapy, +x.it.mapx)); });
   c.sort((a, b) => (b.s + (b.it.firstimage ? 0.4 : 0)) - (a.s + (a.it.firstimage ? 0.4 : 0)) || a.d - b.d);
