@@ -559,7 +559,8 @@ const Nudge = {
 };
 function notify(title, body) {
   if (!LS.get('lm-notify-on', true)) return; /* 내 정보에서 알림을 껐으면 보내지 않는다 */
-  if (LocalNoti) { LocalNoti.schedule({ notifications: [{ id: 1, title, body }] }).catch(() => {}); return; }
+  /* 허락받기 전에는 보내지 않는다 (보내려 하면 폰이 갑자기 알림 허용을 물어본다) */
+  if (LocalNoti) { LocalNoti.checkPermissions().then(p => { if (p.display === 'granted') return LocalNoti.schedule({ notifications: [{ id: 1, title, body }] }); }).catch(() => {}); return; }
   if (!document.hidden || !('Notification' in window) || Notification.permission !== 'granted') return;
   /* 안드로이드 크롬은 new Notification 이 안 되고 서비스워커로만 띄울 수 있다 */
   const sw = navigator.serviceWorker && navigator.serviceWorker.ready; if (sw) sw.then(r => r.showNotification(title, { body, tag: 'lm-day', icon: 'icons/icon-192.png' })).catch(() => { try { new Notification(title, { body, tag: 'lm-day' }); } catch (e) {} }); else { try { new Notification(title, { body, tag: 'lm-day' }); } catch (e) {} }
