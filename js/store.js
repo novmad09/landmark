@@ -156,7 +156,8 @@ const remote = {
   },
   async unstamp(placeId) { if (!this.session) return { ok: false, reason: '로그인이 필요해요' }; const s = this.stamps[placeId]; if (!s) return { ok: false, reason: '취소할 도장이 없어요' }; const t = s.last; const from = new Date(new Date(t + 'T00:00:00Z').getTime() - 9 * 3600e3).toISOString(); const { error } = await this.sb.from('stamps').delete().eq('user_id', this.session.user.id).eq('place_id', placeId).gte('stamped_at', from); if (error) return { ok: false, reason: serverErr(error) }; await this.refresh(); return { ok: true }; },
   photosOf(placeId) { const bl = Safety.blocked(); return this.photos.filter(x => x.placeId === placeId && !bl.has(x.userId)).sort((a, b) => b.likes - a.likes || b.createdAt.localeCompare(a.createdAt)); },
-  coverOf(placeId) { const ph = this.photosOf(placeId)[0]; return ph && ph.likes >= 5 ? ph : null; },
+  /* 기본 사진이 있는 곳은 좋아요 5개부터, 기본 사진이 없는 곳은 첫 사진이 바로 대표 사진이 된다 */
+  coverOf(placeId) { const ph = this.photosOf(placeId)[0]; return ph && (ph.likes >= 5 || !((window.MEDIA || {})[placeId] || {}).img) ? ph : null; },
   async addPhoto(placeId, dataUrl, pos) {
     if (!this.session) return { ok: false, reason: '로그인이 필요해요', needLogin: true };
     if (!this.stamps[placeId] && !(window.Memory && window.Memory.of(placeId))) return { ok: false, reason: '다녀온 곳에만 사진을 올릴 수 있어요' };

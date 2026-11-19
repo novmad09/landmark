@@ -839,3 +839,13 @@ div.pk{display:flex;flex-direction:column;gap:2px;padding:12px 14px;border-radiu
 .onb h2{word-break:keep-all;text-wrap:balance}
 /* 변경 금지 조건 사진: 자르지 않고 전체를 보여 준다 */
 .hero img.whole,#cover img.whole{object-fit:contain;background:#14161b}
+/* 공식 정보(한국관광공사) */
+.detail .kto{margin:18px 0 6px;padding:16px;border-radius:16px;background:var(--card,rgba(127,127,127,.08));border:1px solid var(--line,rgba(127,127,127,.18))}
+.detail .kto h3{margin:0 0 8px;font-size:17px}
+.detail .kto .ov{margin:0 0 12px;font-size:16px;line-height:1.6}
+.detail .kto dl{margin:0;display:grid;gap:8px}
+.detail .kto dl div{display:grid;grid-template-columns:76px 1fr;gap:10px;font-size:16px;line-height:1.5}
+.detail .kto dt{opacity:.65}
+.detail .kto dd{margin:0;word-break:keep-all;overflow-wrap:anywhere}
+.detail .kto .home{display:inline-flex;align-items:center;min-height:44px;margin-top:8px;font-size:16px;font-weight:700;color:var(--brand);text-decoration:none}
+.detail .kto .by{margin:8px 0 0;font-size:13px;opacity:.6;line-height:1.4}
