@@ -1,6 +1,6 @@
 /* 앱 설정. Supabase 값을 채우면 서버 모드, 비우면 로컬 모드(기기 안에만 저장) */
 window.APP_CONFIG = {
-  version: '0.71',          // 내 정보 하단에 표시. 배포마다 올린다
+  version: '0.72',          // 내 정보 하단에 표시. 배포마다 올린다
   cloudUrl: 'https://sdsahthvnasdvlqqxtjo.supabase.co',           // 서버(Supabase) 주소
   cloudKey: 'sb_publishable_22LDwk-_OAQ_NfRu5uzrSQ_BaaDVEOk',    // 공개용 키 (앱에 넣어도 되는 키. secret 키는 절대 넣지 않는다)
   supabaseUrl: '',          // 예: 'https://xxxx.supabase.co'
