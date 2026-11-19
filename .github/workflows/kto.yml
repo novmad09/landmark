@@ -1,26 +1,31 @@
-name: KTO 사진·좌표 받기
-# 한국관광공사 자료에서 명소 사진과 좌표를 받아 kto-data 브랜치에 적는다.
-# 저장소 Settings → Secrets and variables → Actions 에 KTO_KEY (일반 인증키) 를 넣어 두어야 한다.
+name: KTO 공식 정보 받기
+# 한국관광공사 자료에서 명소 공식 정보(주소·소개·운영시간·좌표·사진)를 받아 kto-data 브랜치에 적는다.
+# 하루 호출 한도가 있어 며칠에 나눠 이어 받는다. 다 받으면 더 부르지 않는다.
+# 저장소 Settings → Secrets and variables → Actions 에 KTO_KEY (일반 인증키) 가 있어야 한다.
 on:
   push:
     branches: [kto-run]
+  schedule:
+    - cron: '10 19 * * *'   # 매일 새벽 4시 10분 (한국 시간). 다 받고 나면 지운다
   workflow_dispatch: {}
 permissions:
   contents: write
 jobs:
   fetch:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: kto-run
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Previous result
+        run: mkdir -p tools/out && (curl -sfL "https://raw.githubusercontent.com/${{ github.repository }}/kto-data/kto.json" -o tools/out/prev.json && grep -q '"places"' tools/out/prev.json || rm -f tools/out/prev.json)
       - name: Fetch
         env:
           KTO_KEY: ${{ secrets.KTO_KEY }}
-          KTO_MISSING: '1'
-          KTO_MAX: '260'
         run: node tools/kto_fetch.mjs
       - name: Save result
         run: |
