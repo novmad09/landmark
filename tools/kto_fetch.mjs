@@ -32,7 +32,8 @@ const CITY = /^(서울|부산|대구|인천|광주|대전|울산|세종|제주|�
 const hv = (a, b, c, d) => { const R = 6371000, x = (c - a) * Math.PI / 180, y = (d - b) * Math.PI / 180; const h = Math.sin(x / 2) ** 2 + Math.cos(a * Math.PI / 180) * Math.cos(c * Math.PI / 180) * Math.sin(y / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(h)); };
 const out = {}; let fatal = '';
 // 사진이 없는 곳부터. 하루 호출 한도(개발 키 1000회) 안에서 되는 데까지 한다
-const order = [...L].sort((a, b) => (MEDIA[a.id] ? 1 : 0) - (MEDIA[b.id] ? 1 : 0));
+const ONLY = process.env.KTO_MISSING === '1'; /* 사진 없는 곳만, 이름을 여러 가지로 바꿔 검색 */
+const order = ONLY ? L.filter(p => !MEDIA[p.id]) : [...L].sort((a, b) => (MEDIA[a.id] ? 1 : 0) - (MEDIA[b.id] ? 1 : 0));
 for (const p of order) {
   const base = p.name.replace(/\(.*?\)/g, '').trim(), par = (p.name.match(/\((.*?)\)/) || [])[1];
   const parts = base.split('·').map(x => x.trim()).filter(Boolean);
@@ -46,8 +47,10 @@ for (const p of order) {
   if (items === null && calls >= MAX) break;
   let c = (items || []).map(it => ({ it, s: score(it) })).filter(x => x.s > 0);
   if (!c.some(x => x.s >= 2.5 && x.it.firstimage) && !MEDIA[p.id]) {
-    const kw = await call('kw', { keyword: parts[0].replace(CITY, ''), arrange: 'O' });
-    if (Array.isArray(kw)) c = c.concat(kw.map(it => ({ it, s: score(it) })).filter(x => x.s > 0 && hv(p.lat, p.lng, +x.it.mapy, +x.it.mapx) < 8000));
+    const kws = ONLY ? [...new Set([parts[0].replace(CITY, ''), parts[1] && parts[1].replace(CITY, ''), par, parts[0].replace(CITY, '').replace(/\s/g, ''), parts[0].replace(CITY, '').split(' ')[0]].filter(x => x && x.length >= 2))].slice(0, 4) : [parts[0].replace(CITY, '')];
+    for (const k of kws) { const kw = await call('kw', { keyword: k, arrange: 'O' });
+      if (Array.isArray(kw)) c = c.concat(kw.map(it => ({ it, s: score(it) || (ONLY && norm(it.title).includes(norm(k)) ? 2 : 0) })).filter(x => x.s > 0 && hv(p.lat, p.lng, +x.it.mapy, +x.it.mapx) < (ONLY ? 3000 : 8000)));
+      if (c.some(x => x.s >= 2.5 && x.it.firstimage)) break; }
   }
   c.forEach(x => { x.d = Math.round(hv(p.lat, p.lng, +x.it.mapy, +x.it.mapx)); });
   c.sort((a, b) => (b.s + (b.it.firstimage ? 0.4 : 0)) - (a.s + (a.it.firstimage ? 0.4 : 0)) || a.d - b.d);

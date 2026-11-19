@@ -19,6 +19,8 @@ jobs:
       - name: Fetch
         env:
           KTO_KEY: ${{ secrets.KTO_KEY }}
+          KTO_MISSING: '1'
+          KTO_MAX: '260'
         run: node tools/kto_fetch.mjs
       - name: Save result
         run: |
