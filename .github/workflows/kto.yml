@@ -1,0 +1,28 @@
+name: KTO 사진·좌표 받기
+# 한국관광공사 자료에서 명소 사진과 좌표를 받아 kto-data 브랜치에 적는다.
+# 저장소 Settings → Secrets and variables → Actions 에 KTO_KEY (일반 인증키) 를 넣어 두어야 한다.
+on:
+  push:
+    branches: [kto-run]
+  workflow_dispatch: {}
+permissions:
+  contents: write
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Fetch
+        env:
+          KTO_KEY: ${{ secrets.KTO_KEY }}
+        run: node tools/kto_fetch.mjs
+      - name: Save result
+        run: |
+          mkdir /tmp/o && cp tools/out/kto.json /tmp/o/
+          cd /tmp/o && git init -q -b kto-data && git add kto.json
+          git -c user.name="github-actions" -c user.email="actions@github.com" commit -q -m "관광공사 자료 결과"
+          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" kto-data
