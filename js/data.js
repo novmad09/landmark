@@ -493,3 +493,5 @@ window.SIDO_CENTER={서울:[126.99,37.56],인천:[126.55,37.45],경기:[127.30,3
    대조가 끝나 v:1 이 되면 원래 반경으로 돌아간다 */
 /* 좌표 자료와 폰 GPS 의 오차를 감안해, 인증 반경은 아무리 좁아도 150m */
 window.LANDMARKS.forEach(p => { if (p.r < 150) p.r = 150; });
+/* 산은 정상에서 찍는다. 정상석 주변은 넓고 GPS 가 잘 튀므로 반경을 300m 로 넉넉히 준다 */
+window.LANDMARKS.forEach(p => { if (p.cat === 'mountain' && /^m\d/.test(p.id) && p.r < 300) p.r = 300; });
