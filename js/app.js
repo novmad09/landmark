@@ -18,7 +18,8 @@ function ask({ title, text, yes, no, input, value }) { return new Promise(res =>
   el.onclick = e => { if (e.target === el) done(null); }; el.querySelector('#askNo').onclick = () => done(false);
   const inp = el.querySelector('#askIn'); const ok = () => done(inp ? inp.value.trim() || false : true); el.querySelector('#askYes').onclick = ok; if (inp) { setTimeout(() => inp.focus(), 50); inp.onkeydown = e => { if (e.key === 'Enter') ok(); }; } }); }
 
-const DEV = cfg.testMode; /* 출시판(testMode:false)에서는 테스트 모드를 켤 수 없다 */
+let DEV = cfg.testMode || localStorage.getItem('lm-dev') === 'true'; /* 출시판(testMode:false)에서는 숨은 문(내 정보의 버전 글자 7번 + 암호)을 연 폰에서만 테스트 메뉴가 보인다 */
+const devHash = t => { let h = 5381; for (const c of String(t).trim().toLowerCase()) h = ((h << 5) + h + c.charCodeAt(0)) >>> 0; return h.toString(36); };
 if (DEV && localStorage.getItem('lm-test') !== null) cfg.testMode = LS.get('lm-test', cfg.testMode); // 내 정보에서 켜고 끈 값
 const store = await window.Store.create(); window.Cloud.init(store); window.Store.TripPhotos.gc().catch(() => {}); try { await window.Memory.init(); } catch (e) {}
 const mapS = window.MapScreen.init({ store, toast, onStamp: startStamp, onDetail: openDetail, onAddTrip: p => addToTrip(p), onPhoto: p => photoOrMemory(p.id), onUndo: () => { if (!screens.dogam.hidden) renderDogam(); }, onStampInfo: p => stampInfo(p), onMemPhotos: ids => { const all = window.Memory.all(); const ms = ids.map(i => all.find(m => m.id === i)).filter(Boolean).sort((a, b) => a.at - b.at); openPhotos(ms.map(m => window.Memory.item(m)), 0, '추억 사진'); }, onGallery: p => openGallery(p.id, 0),
@@ -836,7 +837,7 @@ function renderMe() {
         ${Trips.trash().length ? `<button type="button" id="meTrash"><span>🗑 삭제한 여행 ${Trips.trash().length}</span><small>30일 안에 되살릴 수 있어요</small></button>` : ''}
         ${window.Store.Safety.blocked().size ? `<button type="button" id="meBlocked"><span>🚫 차단한 사용자 ${window.Store.Safety.blocked().size}</span><small>눌러서 풀 수 있어요</small></button>` : ''}
       </div>
-      <div class="legal"><a href="legal/terms.html" target="_blank" rel="noopener">이용약관</a> · <a href="legal/privacy.html" target="_blank" rel="noopener">개인정보처리방침</a> · <a href="legal/delete.html" target="_blank" rel="noopener">삭제 안내</a><span class="ver">v${cfg.version || '0'}${cfg.testMode ? ' · 테스트' : ''}</span></div>
+      <div class="legal"><a href="legal/terms.html" target="_blank" rel="noopener">이용약관</a> · <a href="legal/privacy.html" target="_blank" rel="noopener">개인정보처리방침</a> · <a href="legal/delete.html" target="_blank" rel="noopener">삭제 안내</a><span class="ver" id="meVer">v${cfg.version || '0'}${cfg.testMode ? ' · 테스트' : ''}</span></div>
       <div class="row2"><button class="btn ghost" id="out" type="button">${store.mode === 'local' ? '이름 바꾸기' : '로그아웃'}</button><button class="btn ghost danger" id="wipe" type="button">${window.Cloud.signedIn() ? '탈퇴 · 기록 삭제' : '기록 삭제'}</button></div>${credit}`
     : `<h2>${store.mode === 'local' ? '반가워요!' : '로그인해 주세요'}</h2><p class="note">${store.mode === 'local' ? '이름은 첫 도장을 찍을 때 자동으로 생겨요. 지금 정해도 돼요.' : '도장을 찍으려면 로그인이 필요해요.'}</p><button class="btn primary" id="in" type="button">${store.mode === 'local' ? '이름 정하기' : '로그인'}</button><button type="button" class="recentb" id="meBadges2"><span class="rb-t">뱃지 ${badges.length}개 보기 ›</span></button><div class="melist">${window.Cloud.ready ? `<button type="button" class="meCloud"><span>☁️ ${window.Cloud.signedIn() ? `${loginName(window.Cloud.provider())} 계정 연결됨` : '로그인'}</span><small>${window.Cloud.signedIn() ? `${window.Cloud.email() ? esc(window.Cloud.email()) + ' · ' : ''}기록이 서버에 보관돼요` : '기록을 서버에 보관해요. 폰을 바꿔도 남아요'}</small></button>` : ''}<button type="button" id="meMem"><span>📷 추억 사진 더하기</span><small>${window.Memory.count() ? `사진 ${window.Memory.count()}장 · 명소 ${Object.keys(window.Memory.places()).length}곳` : '지난 여행 사진으로 다녀온 곳을 찾아요'}</small></button></div>${window.Memory.count() ? '<button class="btn ghost danger small" id="wipe" type="button">기록 모두 삭제</button>' : ''}<div class="legal"><a href="legal/terms.html" target="_blank" rel="noopener">이용약관</a> · <a href="legal/privacy.html" target="_blank" rel="noopener">개인정보처리방침</a></div>${credit}`;
   const out = $('#out'); if (out) out.onclick = async () => { if (store.mode === 'local') { const u = store.getUser(); const n = await ask({ title: '이름 바꾸기', input: '새 이름', value: u ? u.nickname : '', yes: '바꾸기', no: '취소' }); if (!n) return; const c = window.Store.Safety.clean(n.trim().slice(0, 14)); if (!c) { toast('쓸 수 없는 이름이에요'); return; } LS.set('lm-user', { ...u, nickname: c }); store.user = { ...u, nickname: c }; renderMe(); toast('이름을 바꿨어요'); return; } await store.signOut(); renderMe(); mapS.refresh(); toast('로그아웃했어요'); };
@@ -866,6 +867,9 @@ function renderMe() {
       try { if (LocalNoti) { const r = await LocalNoti.requestPermissions(); if (r.display !== 'granted') { toast('폰 설정에서 알림을 허용해 주세요'); return; } } else if (Notification.permission === 'default') await Notification.requestPermission(); } catch (e) {}
       if (!LocalNoti && Notification.permission !== 'granted') { toast('폰 설정에서 알림을 허용해 주세요'); return; }
       LS.set('lm-notify-on', true); LS.set('lm-notify-asked', true); scheduleEvening(); toast('밤 10시에 하루를 정리해 알려드려요'); renderMe(); }; }
+  const mv = $('#meVer'); if (mv) mv.onclick = async () => { const now = Date.now(); renderMe.taps = now - (renderMe.tapAt || 0) < 1500 ? (renderMe.taps || 0) + 1 : 1; renderMe.tapAt = now; if (renderMe.taps < 7 || DEV) return; renderMe.taps = 0;
+    const code = await ask({ title: '테스트 메뉴', input: '암호', value: '', yes: '확인', no: '취소' }); if (!code) return; if (devHash(code) !== cfg.devKey) { toast('암호가 맞지 않아요'); return; }
+    DEV = true; localStorage.setItem('lm-dev', 'true'); cfg.testMode = true; LS.set('lm-test', true); renderMe(); mapS.refresh(); toast('테스트 모드 켜짐 · 내 정보에서 끌 수 있어요'); };
   const tm = $('#meTest'); if (tm) tm.onclick = async () => { const on = !cfg.testMode; if (!(await ask({ title: on ? '테스트 모드를 켤까요?' : '테스트 모드를 끌까요?', text: on ? '어디서나 도장이 찍혀요. 개발 중에만 쓰세요.' : '인증 반경 안에서만 도장이 찍혀요.', yes: on ? '켜기' : '끄기', no: '취소' }))) return; cfg.testMode = on; LS.set('lm-test', on); renderMe(); mapS.refresh(); toast(on ? '테스트 모드 켜짐' : '테스트 모드 꺼짐'); };
 }
 /* 뱃지 전체 화면 */
@@ -994,5 +998,11 @@ async function checkFound() { const rows = await window.Cloud.mySuggestions(); i
     notify('제안하신 곳이 명소가 됐어요!', `${p.name} · 첫 도장을 드렸어요`);
     if (await ask({ title: '제안하신 곳이 명소가 됐어요!', text: `${p.name}\n발견한 사람으로 이름이 남고, 이 명소의 첫 도장을 드렸어요.`, yes: '명소 보기', no: '닫기' })) openDetail(p.id); await awardBadges(); }
   if (ch) LS.set('lm-suggest', loc); }
+/* 로그인은 강제하지 않는다. 기록이 쌓였는데 로그인 전이면 앱을 켤 때 가끔(7일에 한 번, 기록이 늘었을 때만) 권한다 */
+async function loginNudge() { if (!window.Cloud.ready || window.Cloud.signedIn() || !LS.get('lm-onboarded', false) || document.querySelector('.login,.onb')) return;
+  const n = Object.keys(allSeen()).length; if (n < 3) return; const last = LS.get('lm-loginask', null); if (last && (Date.now() - last.at < 7 * 86400000 || n <= last.n)) return;
+  LS.set('lm-loginask', { at: Date.now(), n });
+  if (await ask({ title: '기록을 안전하게 보관할까요?', text: `다녀온 곳 ${n}곳이 이 폰에만 있어요. 폰을 바꾸거나 앱을 지우면 사라져요.\n로그인하면 서버에 보관돼요.`, yes: '로그인', no: '나중에' })) pickLogin(); }
+setTimeout(() => loginNudge().catch(() => {}), 5000);
 setTimeout(() => checkFound().catch(() => {}), 6000); document.addEventListener('cloud-auth', () => setTimeout(() => checkFound().catch(() => {}), 3000));
 })();
