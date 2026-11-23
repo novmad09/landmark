@@ -983,7 +983,7 @@ document.addEventListener('cloud-status', async e => { const st = e.detail || {}
 document.addEventListener('cloud-login-failed', e => { const why = String((e && e.detail) || '').replace(/\+/g, ' ').slice(0, 90); toast((window.APP_CONFIG || {}).testMode && why ? `로그인하지 못했어요 (${why})` : '로그인하지 못했어요. 다시 시도해 주세요'); });
 document.addEventListener('cloud-auth', () => { if (!screens.me.hidden) renderMe(); if (window.Cloud.signedIn()) toast('로그인했어요. 기록을 서버와 맞추는 중이에요'); });
 document.addEventListener('cloud-data', () => { if (document.querySelector('.viewer, .pedit, .stampscr, .login')) return; /* 뭔가 하고 있을 땐 건드리지 않는다 */ if (!screens.guide.hidden) renderGuide(); if (detailId && document.querySelector('#detail.open')) openDetail(detailId); });
-document.addEventListener('cloud-sync', () => { mapS.refresh(); if (!screens.dogam.hidden) renderDogam(); if (!screens.me.hidden) renderMe(); toast('서버에 있던 기록을 불러왔어요'); });
+document.addEventListener('cloud-sync', () => { mapS.refresh(); /* 서버에서 되살린 기록으로 이미 채운 뱃지는 조용히 받은 것으로 적는다. 안 그러면 다음 도장 때 한꺼번에 쏟아진다 */ try { window.Badges.award(badgeList()); } catch (e) {} if (!screens.dogam.hidden) renderDogam(); if (!screens.me.hidden) renderMe(); toast('서버에 있던 기록을 불러왔어요'); });
 /* 제안한 곳이 명소가 됐는지 확인: 됐으면 첫 도장을 주고 축하한다 (한 번만) */
 async function checkFound() { const rows = await window.Cloud.mySuggestions(); if (!rows.length) return; const done = new Set(LS.get('lm-found-done', [])); const loc = LS.get('lm-suggest', []); let ch = false;
   for (const r of rows) { const l = loc.find(x => x.name === r.name); if (l && l.status !== r.status) { l.status = r.status; l.placeId = r.place_id || null; ch = true; }
