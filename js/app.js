@@ -964,7 +964,7 @@ document.addEventListener('cloud-status', async e => { const st = e.detail || {}
       ask({ title: ban ? '사진·가이드 올리기가 정지되었어요' : '경고를 받았어요', text: `${t}${t ? ' ' : ''}${ban ? `${until} 사진과 가이드를 올릴 수 없어요. 도장 찍기와 보기는 그대로 돼요.` : '경고 2회는 7일 올리기 정지, 3회는 영구 정지예요.'}`, yes: '확인', no: '이용약관 보기' }).then(v => { if (v === false) openDoc('legal/terms.html', '이용약관'); }); } }
   if (st.deleting && !st.blocked && !delAsked) { delAsked = true;
     if (await ask({ title: '탈퇴 처리 중인 계정이에요', text: `${st.deleting}에 완전히 지워질 예정이에요. 탈퇴를 취소하고 계속 쓸까요?`, yes: '탈퇴 취소', no: '로그아웃' })) { toast(await window.Cloud.cancelDelete() ? '탈퇴를 취소했어요. 도장 기록을 되찾는 중이에요' : '취소하지 못했어요. 다시 시도해 주세요'); } else { await window.Cloud.signOut(); toast('로그아웃했어요'); } delAsked = false; } });
-document.addEventListener('cloud-login-failed', () => toast('로그인하지 못했어요. 다시 시도해 주세요'));
+document.addEventListener('cloud-login-failed', e => { const why = String((e && e.detail) || '').replace(/\+/g, ' ').slice(0, 90); toast((window.APP_CONFIG || {}).testMode && why ? `로그인하지 못했어요 (${why})` : '로그인하지 못했어요. 다시 시도해 주세요'); });
 document.addEventListener('cloud-auth', () => { if (!screens.me.hidden) renderMe(); if (window.Cloud.signedIn()) toast('로그인했어요. 기록을 서버와 맞추는 중이에요'); });
 document.addEventListener('cloud-data', () => { if (document.querySelector('.viewer, .pedit, .stampscr, .login')) return; /* 뭔가 하고 있을 땐 건드리지 않는다 */ if (!screens.guide.hidden) renderGuide(); if (detailId && document.querySelector('#detail.open')) openDetail(detailId); });
 document.addEventListener('cloud-sync', () => { mapS.refresh(); if (!screens.dogam.hidden) renderDogam(); if (!screens.me.hidden) renderMe(); toast('서버에 있던 기록을 불러왔어요'); });
