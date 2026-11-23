@@ -96,6 +96,8 @@ async function memAuto(opts) { opts = opts || {}; if (window.Memory.busy()) retu
   let r; try { r = await window.Memory.import(s.files, prog, { bulk: true }); } catch (e) { el.remove(); window.Memory.clearScan(); mapS.refreshMem(); toast('사진을 넣지 못했어요. 저장 공간을 확인해 주세요'); return null; }
   window.Memory.clearScan(); el.remove(); mapS.refreshMem(); mapS.refresh(); if (!screens.dogam.hidden) renderDogam(); if (!screens.me.hidden) renderMe();
   r.noLoc = 0; r.skipped = s.known; memResult(r, opts); return r; }
+/* 로그인 전에는 이 폰에만 저장된다(로그인하면 그때 서버로 올라간다). '올렸어요'라고만 하면 남들도 보는 줄 안다 */
+const pubWord = (done, what) => window.Cloud && window.Cloud.ready && !window.Cloud.signedIn() ? `${what} 이 폰에 저장했어요. 로그인하면 다른 사람도 볼 수 있어요` : done;
 async function memImport(opts) { opts = opts || {};
   if (!opts.placeId && !opts.any && !opts.pick) return memChoose(opts);
   if (window.Memory.busy()) return null; const files = await pickFiles(opts.any); if (!files.length || window.Memory.busy()) return null;
@@ -694,7 +696,7 @@ function openTripEdit(t, opts) {
     onSaved: () => { if (!screens.dogam.hidden) renderDogam(); },
     onPublish: (tt, d) => { const g = window.TripEditor.toGuide(tt, d, allSeen()); if (!g.stops.length) { toast('다녀온 곳이 있어야 가이드로 올릴 수 있어요'); return; } const u = store.getUser() || { nickname: '여행자' }; const sidos = [...new Set(g.stops.map(s => byId(s.id).sido))];
       const dirty = [g.title, g.tip, ...g.stops.map(s => s.note), ...g.legs.map(l => l.text)].some(x => window.Store.Safety.clean(x) === null); if (dirty) { toast('쓸 수 없는 말이 들어 있어요. 고쳐 주세요'); openTripEdit(tt, { focusPublish: true }); return; }
-      const pub = window.Guides.publish({ ...g, id: tt.pubId, author: u.nickname, region: sidos.join('·'), userId: (store.getUser() || {}).id }); Trips.update(tt.id, { pubId: pub.id }); toast(tt.pubId ? '가이드를 고쳐 올렸어요' : '가이드로 올렸어요'); showTab('guide'); G.tab = 'mine'; G.mineKind = 'mine'; renderGuide(); } }, opts);
+      const pub = window.Guides.publish({ ...g, id: tt.pubId, author: u.nickname, region: sidos.join('·'), userId: (store.getUser() || {}).id }); Trips.update(tt.id, { pubId: pub.id }); toast(pubWord(tt.pubId ? '가이드를 고쳐 올렸어요' : '가이드로 올렸어요', '가이드를')); showTab('guide'); G.tab = 'mine'; G.mineKind = 'mine'; renderGuide(); } }, opts);
 }
 const shareTrip = t => openTripEdit(t, { focusPublish: true });
 /* 완주 후 별점 */
@@ -777,7 +779,7 @@ function pickPhoto(id) {
     { const u = store.getUser(), t = kstToday(); /* 고르기 전에 먼저 알려 준다: 한 명소에 하루 한 장 */
       if (u && store.photosOf(id).some(x => x.userId === u.id && window.Store.kstDate(x.createdAt) === t)) { toast('이 명소에는 오늘 이미 사진을 올렸어요. 내일 또 올려 주세요'); return; } }
     const dataUrl = await window.PhotoEditor.run({ place: p, maxEdge: cfg.photoMaxEdge, date: kstToday().replaceAll('-', '.'), toast }); if (!dataUrl) { await awardBadges(); await askNotify(); return; }
-    toast('올리는 중…'); let r; try { r = await store.addPhoto(id, dataUrl, mapS.pos()); } catch (e) { toast('저장 공간이 부족하거나 사진을 저장할 수 없어요'); return; } if (!r.ok) { toast(r.reason); return; } toast('사진을 올렸어요'); openDetail(id); mapS.refresh(); await awardBadges(); })();
+    toast('올리는 중…'); let r; try { r = await store.addPhoto(id, dataUrl, mapS.pos()); } catch (e) { toast('저장 공간이 부족하거나 사진을 저장할 수 없어요'); return; } if (!r.ok) { toast(r.reason); return; } toast(pubWord('사진을 올렸어요', '사진을')); openDetail(id); mapS.refresh(); await awardBadges(); })();
 }
 function shrink(file, maxEdge) { return new Promise((res, rej) => { const img = new Image(); const url = URL.createObjectURL(file); img.onload = () => { const s = Math.min(1, maxEdge / Math.max(img.width, img.height)); const c = document.createElement('canvas'); c.width = Math.round(img.width * s); c.height = Math.round(img.height * s); c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url); res(c.toDataURL('image/jpeg', 0.84)); }; img.onerror = rej; img.src = url; }); }
 
