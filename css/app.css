@@ -855,3 +855,8 @@ div.pk{display:flex;flex-direction:column;gap:2px;padding:12px 14px;border-radiu
 
 .loginpick .emlink{margin-top:6px;background:none;border:0;font:inherit;font-size:14px;color:var(--ink-soft);text-decoration:underline;padding:10px;align-self:center}
 .loginpick .box input{margin-top:10px}
+
+/* 내 정보: 이름을 누르면 바꿀 수 있다 */
+#meName{font:inherit;color:inherit;background:none;border:0;padding:0;margin:0;text-align:left;cursor:pointer;min-height:40px}
+#meName small{font-size:.6em;opacity:.55;font-weight:400}
+.ptools .sizes input[type=range]{flex:1;min-width:0;height:44px;accent-color:var(--brand)}

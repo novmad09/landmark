@@ -127,12 +127,12 @@
   const acct = {
     ready: !!sb, signedIn: () => !!uid(), email: () => (session && session.user && session.user.email) || '',
     /* 같은 이메일이면 여러 로그인 수단이 한 계정에 묶인다. 가장 최근에 쓴 수단을 돌려준다 */
-    provider: () => { const u = session && session.user; if (!u) return ''; const ids = (u.identities || []).slice().sort((a, b) => String(b.last_sign_in_at || '').localeCompare(String(a.last_sign_in_at || ''))); return (ids[0] && ids[0].provider) || (u.app_metadata && u.app_metadata.provider) || ''; },
+    provider: () => { const u = session && session.user; if (!u) return ''; /* 방금 누른 로그인 수단이 가장 정확하다. 같은 메일로 묶인 계정은 서버가 알려 주는 '최근 수단'이 틀릴 때가 있다 */ const via = get('lm-via', ''); if (via && (via === 'email' || (u.identities || []).some(i => i.provider === via))) return via; const ids = (u.identities || []).slice().sort((a, b) => String(b.last_sign_in_at || '').localeCompare(String(a.last_sign_in_at || ''))); return (ids[0] && ids[0].provider) || (u.app_metadata && u.app_metadata.provider) || ''; },
     name: () => { const m = session && session.user && session.user.user_metadata; return (m && (m.name || m.full_name)) || ''; },
     /* 웹: 페이지째 다녀온다. 앱: 구글이 앱 안 화면(웹뷰) 로그인을 막으므로 바깥 브라우저 창으로 다녀오고 com.weekend.landmark://auth 로 돌아온다 */
     /* 이메일·비밀번호 로그인. 가입 화면은 없다: 운영자가 서버에서 만든 계정(스토어 심사용)만 쓴다 */
-    signInEmail: (email, password) => sb.auth.signInWithPassword({ email, password }),
-    async signIn(provider) { provider = provider || 'google'; if (!NATIVE) return sb.auth.signInWithOAuth({ provider, options: { redirectTo: location.origin + location.pathname } });
+    signInEmail: (email, password) => { set('lm-via', 'email'); return sb.auth.signInWithPassword({ email, password }); },
+    async signIn(provider) { provider = provider || 'google'; set('lm-via', provider); if (!NATIVE) return sb.auth.signInWithOAuth({ provider, options: { redirectTo: location.origin + location.pathname } });
       const { data, error } = await sb.auth.signInWithOAuth({ provider, options: { redirectTo: APP_URL, skipBrowserRedirect: true } }); if (error) throw error; await NP.Browser.open({ url: data.url }); },
     async signOut() { try { await sb.auth.signOut({ scope: 'local' }); /* 이 기기만 로그아웃. 다른 폰의 로그인은 그대로 둔다 */ } catch (e) {} session = null; document.dispatchEvent(new CustomEvent('cloud-auth')); },
     /* 도장을 찍거나 취소했을 때 앱이 알려 준다 */

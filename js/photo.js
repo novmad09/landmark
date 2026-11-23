@@ -10,8 +10,8 @@ const noise = seed => { const g = Array.from({ length: 64 }, (_, i) => { const v
 
 /* 도장 스티커 그리기 (먹 도장 화면과 같은 모양) */
 function drawSeal(ctx, { x, y, R, name, date, angle, seed }) {
-  const f = window.sealFit(name, R); const nz = noise(seed); ctx.save(); ctx.translate(x, y); ctx.rotate(angle);
-  ctx.beginPath(); for (let k = 0; k <= 96; k++) { const a = k / 96 * Math.PI * 2, w = 1 + (nz(a) - .5) * 0.07; const px = Math.cos(a) * R * w * f.ax, py = Math.sin(a) * R * w; k ? ctx.lineTo(px, py) : ctx.moveTo(px, py); } ctx.closePath();
+  const f = window.sealFit(name, R, false, true); /* 사진 위 도장은 반듯한 정원 */ ctx.save(); ctx.translate(x, y); ctx.rotate(angle);
+  ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.closePath();
   /* 사진 위에서도 또렷하게: 쨍한 빨강 + 흰 테두리, 얼룩 점 없음 */
   const RED = '#E6332A'; ctx.lineJoin = 'round';
   ctx.lineWidth = R * 0.16; ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.stroke(); ctx.lineWidth = R * 0.1; ctx.strokeStyle = RED; ctx.stroke();
@@ -44,13 +44,13 @@ function loadImage(file, maxEdge) { return new Promise((res, rej) => { const img
 function edit({ place, image, date, onDone, onCancel }) {
   const el = document.createElement('section'); el.className = 'pedit'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', '사진 꾸미기');
   el.innerHTML = `<header><button class="x2" type="button" id="peX" aria-label="취소">×</button><b>사진 꾸미기</b><button class="ok" type="button" id="peOk">올리기</button></header>
-    <div class="pstage"><canvas id="peC"></canvas><p class="phint">도장을 끌어서 옮길 수 있어요</p></div>
+    <div class="pstage"><canvas id="peC"></canvas><p class="phint">도장을 끌어서 옮기고, 두 손가락으로 벌려 크기를 바꿀 수 있어요</p></div>
     <div class="ptools"><div class="row filters" id="peF" ${('filter' in CanvasRenderingContext2D.prototype) ? '' : 'hidden'}>${FILTERS.map(f => `<button type="button" class="chip" data-f="${f.id}" aria-pressed="${f.id === 'none'}">${f.name}</button>`).join('')}</div>
-    <div class="row sizes"><span>도장 크기</span><button type="button" class="chip" id="peSm">작게</button><button type="button" class="chip" id="peLg">크게</button><button type="button" class="chip" id="peOff" aria-pressed="false">도장 빼기</button></div></div>`;
+    <div class="row sizes"><span>도장 크기</span><input type="range" id="peSize" min="0" max="100" value="30" aria-label="도장 크기"><button type="button" class="chip" id="peOff" aria-pressed="false">도장 빼기</button></div></div>`;
   document.getElementById('app').appendChild(el);
   const cv = el.querySelector('#peC'), ctx = cv.getContext('2d'); const W = image.width, H = image.height; cv.width = W; cv.height = H;
-  const seed = Math.random() * 1000, angle = (Math.random() * 16 - 8) * Math.PI / 180;
-  const st = { filter: 'none', seal: true, R: Math.min(W, H) * 0.14, x: 0, y: 0 }; st.x = W - st.R * 1.35 * (window.sealWide(place.name) ? 1.55 : 1); st.y = H - st.R * 1.35;
+  const seed = 0, angle = 0; const Rmin = Math.min(W, H) * 0.07, Rmax = Math.min(W, H) * 0.36;
+  const st = { filter: 'none', seal: true, R: Math.min(W, H) * 0.14, x: 0, y: 0 }; st.x = W - st.R * 1.35; st.y = H - st.R * 1.35;
   function render(final) {
     ctx.save(); ctx.clearRect(0, 0, W, H); const f = FILTERS.find(x => x.id === st.filter); ctx.filter = f.css; ctx.drawImage(image, 0, 0); ctx.filter = 'none'; ctx.restore();
     if (st.seal) drawSeal(ctx, { x: st.x, y: st.y, R: st.R, name: place.name, date, angle, seed });
@@ -59,13 +59,19 @@ function edit({ place, image, date, onDone, onCancel }) {
   }
   render();
   // 드래그로 도장 옮기기
-  let drag = null; const toC = e => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * W / r.width, (e.clientY - r.top) * H / r.height]; };
-  cv.addEventListener('pointerdown', e => { if (!st.seal) return; const [x, y] = toC(e); if (Math.hypot(x - st.x, y - st.y) < st.R * 1.4) { drag = { dx: st.x - x, dy: st.y - y }; cv.setPointerCapture(e.pointerId); e.preventDefault(); } });
-  cv.addEventListener('pointermove', e => { if (!drag) return; const [x, y] = toC(e); st.x = Math.max(st.R, Math.min(W - st.R, x + drag.dx)); st.y = Math.max(st.R, Math.min(H - st.R, y + drag.dy)); render(); });
-  const end = () => { drag = null; }; cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
+  // 한 손가락: 도장 옮기기 / 두 손가락: 벌리고 오므려 크기 바꾸기 / 마우스 휠·아래 막대로도 크기를 바꾼다
+  let drag = null, pinch = null; const pts = new Map(); const toC = e => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * W / r.width, (e.clientY - r.top) * H / r.height]; };
+  const sizeEl = el.querySelector('#peSize'); const clampPos = () => { const m = st.R * 1.1; /* 테두리 두께까지 사진 안에 */ st.x = Math.max(m, Math.min(W - m, st.x)); st.y = Math.max(m, Math.min(H - m, st.y)); };
+  const setR = (r, fromSlider) => { st.R = Math.max(Rmin, Math.min(Rmax, r)); clampPos(); if (!fromSlider) sizeEl.value = Math.round((st.R - Rmin) / (Rmax - Rmin) * 100); render(); }; setR(st.R);
+  const gap = () => { const [a, b] = [...pts.values()]; return Math.hypot(a[0] - b[0], a[1] - b[1]); };
+  cv.addEventListener('pointerdown', e => { if (!st.seal) return; const [x, y] = toC(e); pts.set(e.pointerId, [x, y]); try { cv.setPointerCapture(e.pointerId); } catch (er) {} e.preventDefault();
+    if (pts.size === 2) { drag = null; pinch = { d: gap() || 1, R: st.R }; } else if (pts.size === 1 && Math.hypot(x - st.x, y - st.y) < st.R * 1.4) drag = { dx: st.x - x, dy: st.y - y }; });
+  cv.addEventListener('pointermove', e => { if (!pts.has(e.pointerId)) return; const [x, y] = toC(e); pts.set(e.pointerId, [x, y]);
+    if (pinch && pts.size === 2) { setR(pinch.R * gap() / pinch.d); return; } if (!drag) return; st.x = x + drag.dx; st.y = y + drag.dy; clampPos(); render(); });
+  const end = e => { pts.delete(e.pointerId); drag = null; if (pts.size < 2) pinch = null; }; cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
+  cv.addEventListener('wheel', e => { if (!st.seal) return; e.preventDefault(); setR(st.R * (e.deltaY < 0 ? 1.08 : 0.92)); }, { passive: false });
+  sizeEl.oninput = () => setR(Rmin + (Rmax - Rmin) * sizeEl.value / 100, true);
   el.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { st.filter = b.dataset.f; el.querySelectorAll('[data-f]').forEach(x => x.setAttribute('aria-pressed', x === b)); render(); });
-  el.querySelector('#peSm').onclick = () => { st.R = Math.max(Math.min(W, H) * 0.08, st.R * 0.85); render(); };
-  el.querySelector('#peLg').onclick = () => { st.R = Math.min(Math.min(W, H) * 0.3, st.R * 1.18); render(); };
   el.querySelector('#peOff').onclick = e => { st.seal = !st.seal; e.currentTarget.setAttribute('aria-pressed', String(!st.seal)); e.currentTarget.textContent = st.seal ? '도장 빼기' : '도장 넣기'; render(); };
   el.querySelector('#peX').onclick = () => { el.remove(); onCancel && onCancel(); };
   el.querySelector('#peOk').onclick = () => { render(true); const out = cv.toDataURL('image/jpeg', 0.86); el.remove(); onDone(out); };
