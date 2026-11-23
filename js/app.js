@@ -171,18 +171,34 @@ const NICK_A = ['느긋한', '부지런한', '씩씩한', '호기심 많은', '�
 const NICK_B = ['여행자', '나그네', '탐험가', '도장꾼', '길동무', '산책러', '등산객', '여행가'];
 function randomNick() { const pick = a => a[Math.floor(Math.random() * a.length)]; return `${pick(NICK_A)} ${pick(NICK_B)} ${Math.floor(100 + Math.random() * 900)}`; }
 /* 로그인 수단. config 의 logins 에 적힌 것만 보여 준다 (서버에 설정을 마친 것만 적는다) */
-const LOGINS = { google: { name: '구글', cls: 'google' }, kakao: { name: '카카오', cls: 'kakao' }, naver: { name: '네이버', cls: 'naver', id: 'custom:naver' }, apple: { name: 'Apple', cls: 'apple' } };
+const LOGINS = { email: { name: '이메일', cls: 'ghost' }, google: { name: '구글', cls: 'google' }, kakao: { name: '카카오', cls: 'kakao' }, naver: { name: '네이버', cls: 'naver', id: 'custom:naver' }, apple: { name: 'Apple', cls: 'apple' } };
 function loginName(p) { const k = String(p || '').replace('custom:', ''); return (LOGINS[k] && LOGINS[k].name) || '로그인'; }
 function pickLogin() {
-  const list = ((window.APP_CONFIG || {}).logins || ['google']).filter(k => LOGINS[k]);
+  const list = ((window.APP_CONFIG || {}).logins || ['google']).filter(k => LOGINS[k] && k !== 'email');
   const start = async k => { toast(`${LOGINS[k].name} 로그인 화면으로 이동해요`); try { const r = await window.Cloud.signIn(LOGINS[k].id || k); if (r && r.error) toast('로그인을 시작하지 못했어요'); } catch (e) { toast('로그인을 시작하지 못했어요'); } };
-  if (list.length === 1) return start(list[0]);
   const el = document.createElement('div'); el.className = 'login loginpick';
-  el.innerHTML = `<div class="box"><h2>로그인</h2><p>기록을 서버에 보관해요. 폰을 바꿔도 남아요.</p>${list.map(k => `<button class="btn ${LOGINS[k].cls}" type="button" data-k="${k}">${LOGINS[k].name}로 계속하기</button>`).join('')}<button class="btn ghost" id="no" type="button">나중에</button></div>`;
+  el.innerHTML = `<div class="box"><h2>로그인</h2><p>기록을 서버에 보관해요. 폰을 바꿔도 남아요.</p>${list.map(k => `<button class="btn ${LOGINS[k].cls}" type="button" data-k="${k}">${LOGINS[k].name}로 계속하기</button>`).join('')}<button class="btn ghost" id="no" type="button">나중에</button><button class="emlink" id="em" type="button">이메일로 로그인</button></div>`;
   document.getElementById('app').appendChild(el);
   el.onclick = e => { if (e.target === el) el.remove(); };
   el.querySelector('#no').onclick = () => el.remove();
+  el.querySelector('#em').onclick = () => { el.remove(); emailLogin(); };
   el.querySelectorAll('[data-k]').forEach(b => b.onclick = () => { el.remove(); start(b.dataset.k); });
+}
+/* 이메일 로그인: 가입은 받지 않는다. 서버에 미리 만들어 둔 계정(스토어 심사용)으로만 들어온다 */
+function emailLogin() {
+  const el = document.createElement('div'); el.className = 'login loginpick';
+  el.innerHTML = `<div class="box"><h2>이메일로 로그인</h2><p>미리 받은 계정이 있을 때만 써요.</p><input type="email" id="emId" autocomplete="username" placeholder="이메일" inputmode="email"><input type="password" id="emPw" autocomplete="current-password" placeholder="비밀번호"><button class="btn primary" id="emGo" type="button">로그인</button><button class="btn ghost" id="no" type="button">닫기</button></div>`;
+  document.getElementById('app').appendChild(el);
+  el.onclick = e => { if (e.target === el) el.remove(); };
+  el.querySelector('#no').onclick = () => el.remove();
+  const go = el.querySelector('#emGo');
+  go.onclick = async () => {
+    const id = el.querySelector('#emId').value.trim(), pw = el.querySelector('#emPw').value;
+    if (!id || !pw) { toast('이메일과 비밀번호를 적어 주세요'); return; }
+    go.disabled = true;
+    try { const r = await window.Cloud.signInEmail(id, pw); if (r && r.error) { toast('이메일이나 비밀번호가 맞지 않아요'); go.disabled = false; return; } el.remove(); toast('로그인했어요'); }
+    catch (e) { toast('로그인하지 못했어요. 다시 시도해 주세요'); go.disabled = false; }
+  };
 }
 function requireLogin() {
   return new Promise(async res => {
