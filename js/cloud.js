@@ -126,7 +126,8 @@
     pull().then(go); addEventListener('online', go); }
   const acct = {
     ready: !!sb, signedIn: () => !!uid(), email: () => (session && session.user && session.user.email) || '',
-    provider: () => { const m = session && session.user && session.user.app_metadata; return (m && m.provider) || ''; },
+    /* 같은 이메일이면 여러 로그인 수단이 한 계정에 묶인다. 가장 최근에 쓴 수단을 돌려준다 */
+    provider: () => { const u = session && session.user; if (!u) return ''; const ids = (u.identities || []).slice().sort((a, b) => String(b.last_sign_in_at || '').localeCompare(String(a.last_sign_in_at || ''))); return (ids[0] && ids[0].provider) || (u.app_metadata && u.app_metadata.provider) || ''; },
     name: () => { const m = session && session.user && session.user.user_metadata; return (m && (m.name || m.full_name)) || ''; },
     /* 웹: 페이지째 다녀온다. 앱: 구글이 앱 안 화면(웹뷰) 로그인을 막으므로 바깥 브라우저 창으로 다녀오고 com.weekend.landmark://auth 로 돌아온다 */
     async signIn(provider) { provider = provider || 'google'; if (!NATIVE) return sb.auth.signInWithOAuth({ provider, options: { redirectTo: location.origin + location.pathname } });
