@@ -852,3 +852,6 @@ div.pk{display:flex;flex-direction:column;gap:2px;padding:12px 14px;border-radiu
 .detail .kto dd{margin:0;word-break:keep-all;overflow-wrap:anywhere}
 .detail .kto .home{display:inline-flex;align-items:center;min-height:44px;margin-top:8px;font-size:16px;font-weight:700;color:var(--brand);text-decoration:none}
 .detail .kto .by{margin:8px 0 0;font-size:13px;opacity:.6;line-height:1.4}
+
+.loginpick .emlink{margin-top:6px;background:none;border:0;font:inherit;font-size:14px;color:var(--ink-soft);text-decoration:underline;padding:10px;align-self:center}
+.loginpick .box input{margin-top:10px}
