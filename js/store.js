@@ -103,7 +103,7 @@ const local = {
     const loc = this.photos.filter(x => x.id === ph.id || (rid && x.rid === rid)); for (const x of loc) { try { await idb.del(x.id); } catch (e) {} } this.photos = this.photos.filter(x => !loc.includes(x)); return true; },
   async addPhoto(placeId, dataUrl, pos) {
     if (!this.user) return { ok: false, reason: '로그인이 필요해요' };
-    if (!this.stamps[placeId] && !(window.Memory && window.Memory.of(placeId))) return { ok: false, reason: '다녀온 곳에만 사진을 올릴 수 있어요' };
+    if (!this.stamps[placeId]) return { ok: false, reason: '직접 가서 도장을 찍은 곳에만 사진을 올릴 수 있어요' };
     const t = kstToday(), todayCount = this.photos.filter(x => x.placeId === placeId && x.userId === this.user.id && kstDate(x.createdAt) === t).length;
     if (todayCount >= cfg.photosPerDay) return { ok: false, reason: '이 명소에는 하루에 한 장만 올릴 수 있어요. 내일 또 올려 주세요' };
     const ph = { id: 'ph-' + Date.now(), placeId, userId: this.user.id, nickname: this.user.nickname, url: dataUrl, likes: 0, createdAt: new Date().toISOString() };
@@ -160,7 +160,7 @@ const remote = {
   coverOf(placeId) { const ph = this.photosOf(placeId)[0]; return ph && ph.likes >= cfg.coverLikes ? ph : null; },
   async addPhoto(placeId, dataUrl, pos) {
     if (!this.session) return { ok: false, reason: '로그인이 필요해요', needLogin: true };
-    if (!this.stamps[placeId] && !(window.Memory && window.Memory.of(placeId))) return { ok: false, reason: '다녀온 곳에만 사진을 올릴 수 있어요' };
+    if (!this.stamps[placeId]) return { ok: false, reason: '직접 가서 도장을 찍은 곳에만 사진을 올릴 수 있어요' };
     { const t = kstToday(), uid = this.session.user.id; if (this.photos.filter(x => x.placeId === placeId && x.userId === uid && kstDate(x.createdAt) === t).length >= cfg.photosPerDay) return { ok: false, reason: '이 명소에는 하루에 한 장만 올릴 수 있어요. 내일 또 올려 주세요' }; }
     const blob = await (await fetch(dataUrl)).blob(), path = `${this.session.user.id}/${placeId}/${Date.now()}.jpg`;
     const up = await this.sb.storage.from('photos').upload(path, blob, { contentType: 'image/jpeg' }); if (up.error) return { ok: false, reason: serverErr(up.error) };

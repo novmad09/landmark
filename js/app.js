@@ -751,9 +751,9 @@ function closeDetail() { const el = $('#detail'); el.classList.remove('open'); e
 
 /* ---------- 사진 ---------- */
 /* 사진 남기기: 도장 찍은 곳은 사진을 올리고, 아직 안 찍은 곳은 그곳에서 찍은 사진을 넣으면 다녀온 곳이 된다 */
-async function photoOrMemory(id) { if (allSeen()[id]) { pickPhoto(id); return; }
-  const p = byId(id); if (!window.Memory.of(id) && !(await ask({ title: '여기서 찍은 사진이 있나요?', text: `아직 도장이 없는 곳이에요. ${p.name}에서 찍은 사진(찍은 위치가 남아 있는 사진)을 넣으면 다녀온 곳으로 기록돼요. 사진은 내 폰에만 저장돼요.`, yes: '사진 고르기', no: '취소' }))) return;
-  await memImport({ placeId: id }); mapS.refresh(); if (detailId === id) openDetail(id); if (!screens.dogam.hidden) renderDogam(); }
+/* 사진 남기기는 현장에서 도장을 찍은 곳에만. 사진첩 사진으로 다녀온 곳을 찾는 것은 내 정보의 '사진첩에서 다녀온 곳 찾기'가 맡는다 */
+async function photoOrMemory(id) { if (store.stampsOf(id)) { pickPhoto(id); return; }
+  await ask({ title: '도장을 먼저 찍어 주세요', text: `${byId(id).name}에 직접 가서 도장을 찍으면 사진을 남길 수 있어요.`, yes: '알겠어요', no: '닫기' }); }
 /* 길찾기: 네이버 지도 / 구글 지도 가운데 고른다 */
 function routePick(p) { const me = mapS.pos(), nm = encodeURIComponent(p.name.replace(/[·&/]/g, ' ')), and = /Android/i.test(navigator.userAgent);
   const nWeb = mapS.routeUrl(p), nQ = `route/public?${me ? `slat=${me.lat}&slng=${me.lng}&sname=${encodeURIComponent('내 위치')}&` : ''}dlat=${p.lat}&dlng=${p.lng}&dname=${nm}&appname=${encodeURIComponent(location.hostname || 'landmark')}`;
