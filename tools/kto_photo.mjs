@@ -32,15 +32,16 @@ const words = name => { const base = name.replace(/\(.*?\)/g, '').trim(); const 
   const w = [base.replace(/·/g, ' ')]; parts.forEach(p => w.push(p)); if (inPar) w.push(inPar); const sp = base.split(/\s+/); if (sp.length > 1) { w.push(sp[sp.length - 1]); w.push(sp.slice(1).join(' ')); }
   return [...new Set(w.filter(x => norm(x).length >= 2))].slice(0, 4); };
 const out = { at: new Date().toISOString(), places: {} };
-const targets = L.filter(p => !MEDIA[p.id] || MEDIA[p.id].by !== 'kto');
+const EXTRA = fs.existsSync('tools/kto_photo_extra.json') ? JSON.parse(fs.readFileSync('tools/kto_photo_extra.json', 'utf8')) : null; /* 있으면 그 명소만, 적어 둔 검색어로 다시 찾는다 */
+const targets = L.filter(p => EXTRA ? EXTRA[p.id] : (!MEDIA[p.id] || MEDIA[p.id].by !== 'kto'));
 console.log('대상', targets.length, '곳');
 for (const p of targets) {
   if (fatal) break; const found = []; const seen = new Set();
-  for (const kw of words(p.name)) {
+  for (const kw of (EXTRA ? EXTRA[p.id] : words(p.name))) {
     const items = await search(kw); if (!items) break; await sleep(120);
     for (const it of items) { const img = it.galWebImageUrl; if (!img || seen.has(img)) continue; seen.add(img);
       found.push({ kw, title: it.galTitle, loc: it.galPhotographyLocation, by: it.galPhotographer, tags: it.galSearchKeyword, img: String(img).replace(/^http:/, 'https:'), id: it.galContentId, ym: it.galPhotographyMonth }); }
-    if (found.length >= 12) break;
+    if (found.length >= (EXTRA ? 40 : 12)) break;
   }
   out.places[p.id] = { name: p.name, sido: p.sido, gu: p.gu, cat: p.cat, found };
 }
