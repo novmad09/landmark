@@ -107,7 +107,7 @@ async function memImport(opts) { opts = opts || {};
   catch (e) { el.remove(); mapS.refreshMem(); toast('사진을 읽지 못했어요. 저장 공간을 확인해 주세요'); return null; }
   el.remove(); mapS.refreshMem(); if (!screens.dogam.hidden) renderDogam(); if (!screens.me.hidden) renderMe();
   if (opts.placeId) { const p = byId(opts.placeId);
-    toast(r.added ? `${p.name}에 추억 사진 ${r.added}장을 더했어요` : r.rejected ? '다른 곳에서 찍은 사진이라 넣지 않았어요' : r.skipped ? '이미 들어 있는 사진이에요' : '사진을 넣지 못했어요');
+    toast(r.added ? `${p.name}에 추억 사진 ${r.added}장을 더했어요` : r.rejected ? `${p.name}에서 찍은 사진이 아니라서 넣지 않았어요. 현장에서 도장을 찍으면 어떤 사진이든 남길 수 있어요` : r.skipped ? '이미 들어 있는 사진이에요' : '사진에 찍은 위치가 없어 다녀온 곳인지 알 수 없어요. 현장에서 도장을 찍으면 사진을 남길 수 있어요');
     opts.after && opts.after(); return r; }
   memResult(r, opts); return r; }
 function memResult(r, opts) {
@@ -717,7 +717,8 @@ function openDetail(id) {
   detailId = id; const p = byId(id), s = allSeen()[id], photos = store.photosOf(id), cover = store.coverOf(id), pos = mapS.pos(), d = pos ? window.Store.dist(pos, p) : null;
   const uid = (store.getUser() || {}).id; const isMine = ph => ph.userId === uid;
   const sorted = (photoSort === 'new' ? [...photos].sort((x, y) => y.createdAt.localeCompare(x.createdAt)) : [...photos]).sort((x, y) => isMine(y) - isMine(x)); /* 내 사진이 먼저 */
-  const myLatest = sorted.find(isMine); const memTop = window.Memory.photosOf(id).filter(m => m.thumb).pop(); const hero = cover || myLatest || (memTop ? { url: window.Memory.url(memTop), mem: true } : null);
+  const myLatest = sorted.find(isMine); const memTop = window.Memory.photosOf(id).filter(m => m.thumb).pop(); const md0 = (window.MEDIA || {})[id]; /* 대표 사진: 추천 10회 이상 1등 사진 > 기본 사진 > (기본 사진이 없는 곳만) 내 사진 */
+  const hero = cover || (md0 && md0.img ? null : myLatest || (memTop ? { url: window.Memory.url(memTop), mem: true } : null));
   const el = $('#detail'); el.style.setProperty('--c', `var(--c-${p.cat})`);
   const md = (window.MEDIA || {})[id]; const nPh = photos.length + (md && md.img ? 1 : 0);
   const old = !cfg.testMode && pos && (!pos.at || Date.now() - pos.at > 120000); /* 지난번에 저장된 위치: 거리 표시에만 쓰고 도장은 못 찍는다 */
@@ -737,7 +738,7 @@ function openDetail(id) {
   el.classList.add('open'); el.setAttribute('aria-hidden', 'false'); el.scrollTop = 0; document.getElementById('app').appendChild(el); // 묶음 상세 위에 뜨도록 맨 뒤로
   el.querySelector('.back').onclick = closeDetail;
   el.querySelector('#dMap').onclick = () => { closeDetail(); showTab('map'); mapS.focus(id); };
-  el.querySelector('#dHero').onclick = e => { if (e.target.closest('.back')) return; openGallery(id, 0); }; /* 뒤로 버튼은 사진 보기를 열지 않는다 */
+  el.querySelector('#dHero').onclick = e => { if (e.target.closest('.back')) return; openGallery(id, cover && md0 && md0.img ? 1 : 0); }; /* 뒤로 버튼은 사진 보기를 열지 않는다. 기본 사진이 맨 앞, 대표 사진은 그다음 */
   el.querySelector('#dPhoto').onclick = () => photoOrMemory(id);
   { const fx = document.createElement('button'); fx.type = 'button'; fx.className = 'fixlink'; fx.textContent = '정보가 틀렸나요? 수정 제안하기'; fx.onclick = () => fixPlace(p); (el.querySelector('.body') || el).appendChild(fx); }
   { const dv = el.querySelector('#dVisit'); if (dv) dv.onclick = () => stampInfo(p, () => openDetail(id)); }
@@ -751,7 +752,7 @@ function closeDetail() { const el = $('#detail'); el.classList.remove('open'); e
 /* ---------- 사진 ---------- */
 /* 사진 남기기: 도장 찍은 곳은 사진을 올리고, 아직 안 찍은 곳은 그곳에서 찍은 사진을 넣으면 다녀온 곳이 된다 */
 async function photoOrMemory(id) { if (allSeen()[id]) { pickPhoto(id); return; }
-  const p = byId(id); if (!window.Memory.of(id) && !(await ask({ title: '여기서 찍은 사진이 있나요?', text: `${p.name}에서 찍은 사진을 넣으면 다녀온 곳으로 기록돼요. 사진은 내 폰에만 저장돼요.`, yes: '사진 고르기', no: '취소' }))) return;
+  const p = byId(id); if (!window.Memory.of(id) && !(await ask({ title: '여기서 찍은 사진이 있나요?', text: `아직 도장이 없는 곳이에요. ${p.name}에서 찍은 사진(찍은 위치가 남아 있는 사진)을 넣으면 다녀온 곳으로 기록돼요. 사진은 내 폰에만 저장돼요.`, yes: '사진 고르기', no: '취소' }))) return;
   await memImport({ placeId: id }); mapS.refresh(); if (detailId === id) openDetail(id); if (!screens.dogam.hidden) renderDogam(); }
 /* 길찾기: 네이버 지도 / 구글 지도 가운데 고른다 */
 function routePick(p) { const me = mapS.pos(), nm = encodeURIComponent(p.name.replace(/[·&/]/g, ' ')), and = /Android/i.test(navigator.userAgent);
@@ -788,7 +789,7 @@ function shrink(file, maxEdge) { return new Promise((res, rej) => { const img = 
 function openGallery(placeId, start, order) {
   const p = byId(placeId); const md = (window.MEDIA || {})[placeId]; const cover = store.coverOf(placeId);
   const items = (order || store.photosOf(placeId)).map(ph => ({ ph, url: ph.url, cap: `${esc(ph.nickname)} · ${window.Store.kstDate(ph.createdAt).replaceAll('-', '.')}` }));
-  if (md && md.img && !cover) items.unshift({ url: md.img, cap: `${md.credit ? esc(md.credit) + (md.credit.length >= 24 ? '…' : '') + ' · ' : ''}${md.lic || ''}${md.by === 'kto' ? '' : ` · <a href="${md.src}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">위키미디어 공용에서 원본 보기</a>`}` });
+  if (md && md.img) items.unshift({ url: md.img, cap: `${md.credit ? esc(md.credit) + (md.credit.length >= 24 ? '…' : '') + ' · ' : ''}${md.lic || ''}${md.by === 'kto' ? '' : ` · <a href="${md.src}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">위키미디어 공용에서 원본 보기</a>`}` });
   if (!order) window.Memory.photosOf(placeId).filter(m => m.thumb).forEach(m => items.push(window.Memory.item(m))); /* 내 추억 사진도 같이 넘겨 본다 */
   if (!items.length) { toast('아직 사진이 없어요'); return; }
   openPhotos(items, start, p.name, p);
@@ -823,14 +824,14 @@ function renderMe() {
   const sidos = Object.keys(window.SIDO_CENTER).map(sd => { const ps = L.filter(p => p.sido === sd); return { sd, d: ps.filter(p => stamps[p.id]).length, n: ps.length }; }).filter(x => x.d).sort((a, b) => b.d / b.n - a.d / a.n);
   const bar = (label, d, n) => `<div class="prow"><span>${label}</span><div class="pbar"><i style="width:${n ? d / n * 100 : 0}%"></i></div><b>${d}/${n}</b></div>`;
   $('#meCard').innerHTML = u
-    ? `<div class="me-head"><button type="button" class="avatar" id="meAvatar" aria-label="캐릭터 (준비 중)">${ICON.palace}</button><div class="me-id"><h2>${esc(u.nickname)}</h2><button type="button" class="bio" id="meBio">🎯 ${esc(bio) || '내 목표를 적어 보세요'}</button></div></div>
+    ? `<div class="me-head"><button type="button" class="avatar" id="meAvatar" aria-label="캐릭터 (준비 중)">${ICON.palace}</button><div class="me-id"><h2><button type="button" id="meName" aria-label="이름 바꾸기">${esc(u.nickname)} <small>✎</small></button></h2><button type="button" class="bio" id="meBio">🎯 ${esc(bio) || '내 목표를 적어 보세요'}</button></div></div>
       ${titles.length ? `<div class="titles">${titles.map(t => `<span>🏅 ${t} 완성</span>`).join('')}</div>` : ''}
       <div class="stat3"><div><b>${Object.keys(allSeen()).length}</b><span>다녀온 곳</span></div><div><b>${new Set(Object.keys(allSeen()).map(k => (byId(k) || {}).sido).filter(Boolean)).size}</b><span>다녀온 시·도</span></div><div><b>${photos + window.Memory.count()}</b><span>사진</span></div></div>
       <div class="jump2 four"><button type="button" id="meTrips"><b>${tripN}</b><span>여행</span></button><button type="button" id="mePlans"><b>${planN}</b><span>계획</span></button><button type="button" id="meGuides"><b>${guideN}</b><span>가이드</span></button><button type="button" id="meBadges"><b>${got}</b><span>뱃지</span></button></div>
       ${recent.length ? `<button type="button" class="recentb" id="meBadges2"><span class="rb-list">${recent.map(b => window.Badges.svg(b, 44)).join('')}</span><span class="rb-t">뱃지 ${got}/${badges.length} 보기 ›</span></button>` : `<button type="button" class="recentb" id="meBadges2"><span class="rb-t">아직 받은 뱃지가 없어요 · 뱃지 ${badges.length}개 보기 ›</span></button>`}
       <details class="prog progme"><summary>지역별 진행 <span>${sidos.length ? sidos.length + '개 시·도' : ''}</span></summary><div class="progbody">${sidos.length ? sidos.map(x => bar(x.sd, x.d, x.n)).join('') : '<p class="note">아직 도장이 없어요.</p>'}</div></details>
       <div class="melist">${window.Cloud.ready ? `<button type="button" class="meCloud"><span>☁️ ${window.Cloud.signedIn() ? `${loginName(window.Cloud.provider())} 계정 연결됨` : '로그인'}</span><small>${window.Cloud.signedIn() ? `${window.Cloud.email() ? esc(window.Cloud.email()) + ' · ' : ''}기록이 서버에 보관돼요` : '기록을 서버에 보관해요. 폰을 바꿔도 남아요'}</small></button>` : ''}
-        <button type="button" id="meMem"><span>📷 추억 사진 더하기</span><small>${window.Memory.count() ? `사진 ${window.Memory.count()}장 · 명소 ${Object.keys(window.Memory.places()).length}곳` : '지난 여행 사진으로 다녀온 곳을 찾아요'}</small></button>
+        <button type="button" id="meMem"><span>📷 사진첩에서 다녀온 곳 찾기</span><small>${window.Memory.count() ? `사진 ${window.Memory.count()}장 · 명소 ${Object.keys(window.Memory.places()).length}곳` : '지난 여행 사진으로 다녀온 곳을 찾아요'}</small></button>
         ${LS.get('lm-suggest', []).length || foundByMe().length ? `<button type="button" id="meFound"><span>🧭 내가 제안한 명소</span><small>${foundByMe().length ? `명소가 된 곳 ${foundByMe().length}곳 · ` : ''}확인 중 ${LS.get('lm-suggest', []).filter(x => x.status !== 'ok' && !L.some(p => p.name === x.name)).length}곳</small></button>` : ''}<button type="button" id="meSuggest"><span>💬 문의·제안</span><small>앱에 바라는 점이나 불편한 점을 알려 주세요</small></button>
         <button type="button" id="meNotify" class="tog" role="switch" aria-checked="false"><span>🔔 알림 받기</span><i class="sw"></i></button>
         ${DEV ? `<button type="button" id="meTest"><span>🧪 테스트 모드</span><small>${cfg.testMode ? '켜짐 · 어디서나 도장' : '꺼짐 · 반경 안에서만'}</small></button>` : ''}
@@ -839,8 +840,10 @@ function renderMe() {
       </div>
       <div class="legal"><a href="legal/terms.html" target="_blank" rel="noopener">이용약관</a> · <a href="legal/privacy.html" target="_blank" rel="noopener">개인정보처리방침</a> · <a href="legal/delete.html" target="_blank" rel="noopener">삭제 안내</a><span class="ver" id="meVer">v${cfg.version || '0'}${cfg.testMode ? ' · 테스트' : ''}</span></div>
       <div class="row2"><button class="btn ghost" id="out" type="button">${store.mode === 'local' ? '이름 바꾸기' : '로그아웃'}</button><button class="btn ghost danger" id="wipe" type="button">${window.Cloud.signedIn() ? '탈퇴 · 기록 삭제' : '기록 삭제'}</button></div>${credit}`
-    : `<h2>${store.mode === 'local' ? '반가워요!' : '로그인해 주세요'}</h2><p class="note">${store.mode === 'local' ? '이름은 첫 도장을 찍을 때 자동으로 생겨요. 지금 정해도 돼요.' : '도장을 찍으려면 로그인이 필요해요.'}</p><button class="btn primary" id="in" type="button">${store.mode === 'local' ? '이름 정하기' : '로그인'}</button><button type="button" class="recentb" id="meBadges2"><span class="rb-t">뱃지 ${badges.length}개 보기 ›</span></button><div class="melist">${window.Cloud.ready ? `<button type="button" class="meCloud"><span>☁️ ${window.Cloud.signedIn() ? `${loginName(window.Cloud.provider())} 계정 연결됨` : '로그인'}</span><small>${window.Cloud.signedIn() ? `${window.Cloud.email() ? esc(window.Cloud.email()) + ' · ' : ''}기록이 서버에 보관돼요` : '기록을 서버에 보관해요. 폰을 바꿔도 남아요'}</small></button>` : ''}<button type="button" id="meMem"><span>📷 추억 사진 더하기</span><small>${window.Memory.count() ? `사진 ${window.Memory.count()}장 · 명소 ${Object.keys(window.Memory.places()).length}곳` : '지난 여행 사진으로 다녀온 곳을 찾아요'}</small></button></div>${window.Memory.count() ? '<button class="btn ghost danger small" id="wipe" type="button">기록 모두 삭제</button>' : ''}<div class="legal"><a href="legal/terms.html" target="_blank" rel="noopener">이용약관</a> · <a href="legal/privacy.html" target="_blank" rel="noopener">개인정보처리방침</a></div>${credit}`;
-  const out = $('#out'); if (out) out.onclick = async () => { if (store.mode === 'local') { const u = store.getUser(); const n = await ask({ title: '이름 바꾸기', input: '새 이름', value: u ? u.nickname : '', yes: '바꾸기', no: '취소' }); if (!n) return; const c = window.Store.Safety.clean(n.trim().slice(0, 14)); if (!c) { toast('쓸 수 없는 이름이에요'); return; } LS.set('lm-user', { ...u, nickname: c }); store.user = { ...u, nickname: c }; renderMe(); toast('이름을 바꿨어요'); return; } await store.signOut(); renderMe(); mapS.refresh(); toast('로그아웃했어요'); };
+    : `<h2>${store.mode === 'local' ? '반가워요!' : '로그인해 주세요'}</h2><p class="note">${store.mode === 'local' ? '이름은 첫 도장을 찍을 때 자동으로 생겨요. 지금 정해도 돼요.' : '도장을 찍으려면 로그인이 필요해요.'}</p><button class="btn primary" id="in" type="button">${store.mode === 'local' ? '이름 정하기' : '로그인'}</button><button type="button" class="recentb" id="meBadges2"><span class="rb-t">뱃지 ${badges.length}개 보기 ›</span></button><div class="melist">${window.Cloud.ready ? `<button type="button" class="meCloud"><span>☁️ ${window.Cloud.signedIn() ? `${loginName(window.Cloud.provider())} 계정 연결됨` : '로그인'}</span><small>${window.Cloud.signedIn() ? `${window.Cloud.email() ? esc(window.Cloud.email()) + ' · ' : ''}기록이 서버에 보관돼요` : '기록을 서버에 보관해요. 폰을 바꿔도 남아요'}</small></button>` : ''}<button type="button" id="meMem"><span>📷 사진첩에서 다녀온 곳 찾기</span><small>${window.Memory.count() ? `사진 ${window.Memory.count()}장 · 명소 ${Object.keys(window.Memory.places()).length}곳` : '지난 여행 사진으로 다녀온 곳을 찾아요'}</small></button></div>${window.Memory.count() ? '<button class="btn ghost danger small" id="wipe" type="button">기록 모두 삭제</button>' : ''}<div class="legal"><a href="legal/terms.html" target="_blank" rel="noopener">이용약관</a> · <a href="legal/privacy.html" target="_blank" rel="noopener">개인정보처리방침</a></div>${credit}`;
+  const rename = async () => { const u = store.getUser(); const n = await ask({ title: '이름 바꾸기', input: '새 이름', value: u ? u.nickname : '', yes: '바꾸기', no: '취소' }); if (!n) return; const c = window.Store.Safety.clean(n.trim().slice(0, 14)); if (!c) { toast('쓸 수 없는 이름이에요'); return; } LS.set('lm-user', { ...u, nickname: c }); store.user = { ...u, nickname: c }; renderMe(); toast('이름을 바꿨어요'); try { if (window.Cloud.signedIn()) window.Cloud.sync(); } catch (e) {} };
+  const nm = $('#meName'); if (nm) nm.onclick = rename;
+  const out = $('#out'); if (out) out.onclick = async () => { if (store.mode === 'local') return rename(); await store.signOut(); renderMe(); mapS.refresh(); toast('로그아웃했어요'); };
   const inb = $('#in'); if (inb) inb.onclick = async () => { await requireLogin(); renderMe(); };
   document.querySelectorAll('[data-restore]').forEach(b => b.onclick = () => { const t = Trips.restore(b.dataset.restore); renderMe(); if (t) toast(`'${t.name}'${josa(t.name, '을/를')} 되살렸어요`); });
   const mt = $('#meTrips'); if (mt) mt.onclick = () => { DG.view = 'trips'; DG.tripKind = 'trip'; showTab('dogam'); };

@@ -90,7 +90,7 @@ const local = {
   /* 내 폰의 사진 + 서버에 올라온 다른 사람 사진. 내가 올려 서버에도 있는 사진은 서버 것 하나만 보인다 */
   photosOf(placeId) { const bl = Safety.blocked(); const rem = window.Cloud && window.Cloud.photosOf ? window.Cloud.photosOf(placeId) : []; const have = new Set(rem.map(x => x.rid));
     return [...this.photos.filter(x => x.placeId === placeId && !(x.rid && have.has(x.rid))), ...rem].filter(x => !bl.has(x.userId)).sort((a, b) => b.likes - a.likes || String(b.createdAt).localeCompare(String(a.createdAt))); },
-  coverOf(placeId) { const ph = this.photosOf(placeId)[0]; return ph && ph.likes >= 0 ? ph : null; },
+  coverOf(placeId) { const ph = this.photosOf(placeId)[0]; return ph && ph.likes >= cfg.coverLikes ? ph : null; }, /* 대표 사진: 추천을 가장 많이 받은 사진, 단 10회 이상일 때만. 아니면 기본 사진 그대로 */
   async savePhoto(ph) { await idb.put(ph); },
   /* 도장을 그냥 준다 (제안한 곳이 명소가 됐을 때의 첫 도장). 이미 그날 도장이 있으면 그대로 */
   grant(placeId, day) { const s = this.stamps[placeId] || { count: 0, first: day, last: null, days: [], months: [] }; s.days = s.days || [s.first, s.last].filter(Boolean); if (s.days.includes(day)) return false; s.days.push(day); s.days.sort(); s.count = (s.count || 0) + 1; s.first = s.days[0]; s.last = s.days[s.days.length - 1]; s.months = [...new Set(s.days.map(d => +d.slice(5, 7)))]; this.stamps[placeId] = s; LS.set('lm-stamps', this.stamps); if (window.Cloud) window.Cloud.stamped(); return true; },
@@ -157,7 +157,7 @@ const remote = {
   async unstamp(placeId) { if (!this.session) return { ok: false, reason: '로그인이 필요해요' }; const s = this.stamps[placeId]; if (!s) return { ok: false, reason: '취소할 도장이 없어요' }; const t = s.last; const from = new Date(new Date(t + 'T00:00:00Z').getTime() - 9 * 3600e3).toISOString(); const { error } = await this.sb.from('stamps').delete().eq('user_id', this.session.user.id).eq('place_id', placeId).gte('stamped_at', from); if (error) return { ok: false, reason: serverErr(error) }; await this.refresh(); return { ok: true }; },
   photosOf(placeId) { const bl = Safety.blocked(); return this.photos.filter(x => x.placeId === placeId && !bl.has(x.userId)).sort((a, b) => b.likes - a.likes || b.createdAt.localeCompare(a.createdAt)); },
   /* 기본 사진이 있는 곳은 좋아요 5개부터, 기본 사진이 없는 곳은 첫 사진이 바로 대표 사진이 된다 */
-  coverOf(placeId) { const ph = this.photosOf(placeId)[0]; return ph && (ph.likes >= 5 || !((window.MEDIA || {})[placeId] || {}).img) ? ph : null; },
+  coverOf(placeId) { const ph = this.photosOf(placeId)[0]; return ph && ph.likes >= cfg.coverLikes ? ph : null; },
   async addPhoto(placeId, dataUrl, pos) {
     if (!this.session) return { ok: false, reason: '로그인이 필요해요', needLogin: true };
     if (!this.stamps[placeId] && !(window.Memory && window.Memory.of(placeId))) return { ok: false, reason: '다녀온 곳에만 사진을 올릴 수 있어요' };
