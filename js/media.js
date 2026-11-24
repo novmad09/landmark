@@ -1,6 +1,5 @@
-/* 명소 기본 사진: 위키미디어 공용의 자유 이용 사진 (CC BY, CC BY-SA, 퍼블릭 도메인, 공공누리 1유형)과
-   한국관광공사 관광정보·관광사진갤러리 사진 (by:'kto', 공공누리 1·3유형. 3유형은 변경 금지라 자르지 않고 전체를 보여 준다: fit).
-   추천 10회 이상을 받은 사용자 사진이 없으면 이 사진이 대표 사진이다. 촬영자·라이선스를 사진과 함께 표시해야 한다 */
+/* 명소 기본 사진: 한국관광공사 관광정보·관광사진갤러리 사진만 쓴다 (by:'kto', 공공누리 1·3유형. 3유형은 변경 금지라 자르지 않고 전체를 보여 준다: fit).
+   공공 자료에 사진이 없는 곳은 비워 둔다. 추천 10회 이상을 받은 사용자 사진이 없으면 이 사진이 대표 사진이다. 출처·라이선스를 사진과 함께 표시해야 한다 */
 window.MEDIA = {"gbg":{"img":"https://tong.visitkorea.or.kr/cms/resource/98/3487598_image2_1.jpg","credit":"한국관광공사","lic":"공공누리 1유형","by":"kto"},
 "cdg":{"img":"https://tong.visitkorea.or.kr/cms2/website/62/4061962.jpg","credit":"한국관광공사 서문교","lic":"공공누리 1유형","by":"kto"},
 "cgg":{"img":"https://tong.visitkorea.or.kr/cms/resource/94/3536794_image2_1.jpg","credit":"한국관광공사","lic":"공공누리 1유형","by":"kto"},
@@ -102,12 +101,10 @@ window.MEDIA = {"gbg":{"img":"https://tong.visitkorea.or.kr/cms/resource/98/3487
 "m093":{"img":"https://tong.visitkorea.or.kr/cms2/website/15/4070015.jpg","credit":"한국관광공사 천건엽","lic":"공공누리 1유형","by":"kto"},
 "m095":{"img":"https://tong.visitkorea.or.kr/cms/resource/29/3496729_image2_1.jpg","credit":"한국관광공사","lic":"공공누리 3유형","by":"kto","fit":1},
 "m096":{"img":"https://tong.visitkorea.or.kr/cms2/website/00/2838000.jpg","credit":"한국관광공사","lic":"공공누리 1유형","by":"kto"},
-"m097":{"img":"https://upload.wikimedia.org/wikipedia/commons/b/b1/%ED%95%A8%EC%96%91_%ED%99%A9%EC%84%9D%EC%82%B0%EC%84%B1.jpg","credit":"문화재청 (공공누리 제1유형)","lic":"CC BY-SA 4.0","src":"https://commons.wikimedia.org/wiki/File:%ED%95%A8%EC%96%91_%ED%99%A9%EC%84%9D%EC%82%B0%EC%84%B1.jpg"},
 "np01":{"img":"https://tong.visitkorea.or.kr/cms2/website/52/2993252.jpg","credit":"한국관광공사","lic":"공공누리 1유형","by":"kto"},
 "np04":{"img":"https://tong.visitkorea.or.kr/cms/resource/77/3034277_image2_1.jpg","credit":"한국관광공사","lic":"공공누리 3유형","by":"kto","fit":1},
 "L001":{"img":"https://tong.visitkorea.or.kr/cms/resource/70/3422470_image2_1.jpg","credit":"한국관광공사","lic":"공공누리 1유형","by":"kto"},
 "L002":{"img":"https://tong.visitkorea.or.kr/cms/resource/29/3584529_image2_1.jpg","credit":"한국관광공사","lic":"공공누리 1유형","by":"kto"},
-"L003":{"img":"https://thumb.wikimedia.org/wikipedia/commons/thumb/1/1f/Seoul_Arts_Center_20.JPG/960px-Seoul_Arts_Center_20.JPG","credit":"User:Piotrus","lic":"CC BY-SA 3.0","src":"https://commons.wikimedia.org/wiki/File:Seoul_Arts_Center_20.JPG"},
 "L005":{"img":"https://tong.visitkorea.or.kr/cms/resource_photo/10/2907610_image2_1.jpg","credit":"한국관광공사","lic":"공공누리 1유형","by":"kto"},
 "L006":{"img":"https://tong.visitkorea.or.kr/cms/resource/33/4129633_image2_1.jpg","credit":"한국관광공사","lic":"공공누리 1유형","by":"kto"},
 "L007":{"img":"https://tong.visitkorea.or.kr/cms/resource/39/3585939_image2_1.jpg","credit":"한국관광공사","lic":"공공누리 3유형","by":"kto","fit":1},
@@ -280,7 +277,6 @@ window.MEDIA = {"gbg":{"img":"https://tong.visitkorea.or.kr/cms/resource/98/3487
 "m007":{"img":"https://tong.visitkorea.or.kr/cms/resource/73/3509273_image2_1.jpg","credit":"한국관광공사","lic":"공공누리 3유형","by":"kto","fit":1},
 "m019":{"img":"https://tong.visitkorea.or.kr/cms2/website/69/2647769.jpg","credit":"한국관광공사 두드림","lic":"공공누리 1유형","by":"kto"},
 "m023":{"img":"https://tong.visitkorea.or.kr/cms/resource/03/3347903_image2_1.JPG","credit":"한국관광공사","lic":"공공누리 3유형","by":"kto","fit":1},
-"m026":{"img":"https://thumb.wikimedia.org/wikipedia/commons/thumb/8/86/%EB%8F%84%EB%9D%BD%EC%82%B0_%EC%9B%90%EA%B2%BD.JPG/960px-%EB%8F%84%EB%9D%BD%EC%82%B0_%EC%9B%90%EA%B2%BD.JPG","credit":"류금열","lic":"CC BY-SA 3.0","src":"https://commons.wikimedia.org/wiki/File:%EB%8F%84%EB%9D%BD%EC%82%B0_%EC%9B%90%EA%B2%BD.JPG"},
 "m027":{"img":"https://tong.visitkorea.or.kr/cms/resource/47/3511647_image2_1.jpg","credit":"한국관광공사","lic":"공공누리 1유형","by":"kto"},
 "m029":{"img":"https://tong.visitkorea.or.kr/cms2/website/29/3554129.JPG","credit":"한국관광공사 손명권","lic":"공공누리 1유형","by":"kto"},
 "m035":{"img":"https://tong.visitkorea.or.kr/cms/resource/56/4137556_image2_1.jpg","credit":"한국관광공사","lic":"공공누리 3유형","by":"kto","fit":1},
