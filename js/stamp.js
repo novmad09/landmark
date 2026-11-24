@@ -49,7 +49,7 @@ const reduce = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 const grain = (() => { const c = document.createElement('canvas'); c.width = c.height = 200; const g = c.getContext('2d'); for (let i = 0; i < 2400; i++) { g.fillStyle = `rgba(90,70,40,${Math.random() * 0.07})`; g.fillRect(Math.random() * 200, Math.random() * 200, Math.random() * 2 + 0.5, Math.random() * 1.4 + 0.4); } return c; })();
 
 function open({ place, check, commit, onPhoto, onDone, onDogam, onCancel, toast, start }) {
-  const el = document.createElement('section'); el.className = 'stampscr'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', `${place.name} 도장 찍기`);
+  const el = document.createElement('section'); el.className = 'stampscr onmap'; /* 처음부터 지도 위(투명)로 뜬다. 종이색으로 떴다가 바뀌면 누르는 순간 번쩍인다 */ el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', `${place.name} 도장 찍기`);
   const SR = place.name.replace(/\s/g, '').length > 6 ? 96 : 86; /* 긴 이름은 찍히는 도장을 키운다 */
   const fit = window.sealFit(place.name, SR), gfit = window.sealFit(place.name, 75, true, true);
   el.innerHTML = `<canvas id="inkC"></canvas><button class="cancel" type="button" aria-label="닫기">×</button>

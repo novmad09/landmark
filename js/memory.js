@@ -47,7 +47,7 @@
   }
 
   const M = {
-    async init() { list = await db.all(); return list; },
+    async init() { /* 사진첩에서 다녀온 곳 찾기는 뺐다(config.memory). 꺼져 있으면 예전에 넣은 것도 없는 것으로 본다 */ list = (window.APP_CONFIG || {}).memory ? await db.all() : []; return list; },
     all: () => list,
     count: () => list.length,
     /* 명소별 추억 */
