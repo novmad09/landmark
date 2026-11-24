@@ -18,7 +18,7 @@ function ask({ title, text, yes, no, input, value }) { return new Promise(res =>
   el.onclick = e => { if (e.target === el) done(null); }; el.querySelector('#askNo').onclick = () => done(false);
   const inp = el.querySelector('#askIn'); const ok = () => done(inp ? inp.value.trim() || false : true); el.querySelector('#askYes').onclick = ok; if (inp) { setTimeout(() => inp.focus(), 50); inp.onkeydown = e => { if (e.key === 'Enter') ok(); }; } }); }
 
-let DEV = cfg.testMode || localStorage.getItem('lm-dev') === 'true'; /* 출시판(testMode:false)에서는 숨은 문(내 정보의 버전 글자 7번 + 암호)을 연 폰에서만 테스트 메뉴가 보인다 */
+let DEV = cfg.testMode || localStorage.getItem('lm-dev') === 'true'; /* 출시판(testMode:false)에서는 숨은 문(지도 위쪽 '랜드마크' 글자 10번 + 암호)을 연 폰에서만 테스트 메뉴가 보인다 */
 const devHash = t => { let h = 5381; for (const c of String(t).trim().toLowerCase()) h = ((h << 5) + h + c.charCodeAt(0)) >>> 0; return h.toString(36); };
 if (DEV && localStorage.getItem('lm-test') !== null) cfg.testMode = LS.get('lm-test', cfg.testMode); // 내 정보에서 켜고 끈 값
 const store = await window.Store.create(); window.Cloud.init(store); window.Store.TripPhotos.gc().catch(() => {}); try { await window.Memory.init(); } catch (e) {}
@@ -870,9 +870,6 @@ function renderMe() {
       try { if (LocalNoti) { const r = await LocalNoti.requestPermissions(); if (r.display !== 'granted') { toast('폰 설정에서 알림을 허용해 주세요'); return; } } else if (Notification.permission === 'default') await Notification.requestPermission(); } catch (e) {}
       if (!LocalNoti && Notification.permission !== 'granted') { toast('폰 설정에서 알림을 허용해 주세요'); return; }
       LS.set('lm-notify-on', true); LS.set('lm-notify-asked', true); scheduleEvening(); toast('밤 10시에 하루를 정리해 알려드려요'); renderMe(); }; }
-  const mv = $('#meVer'); if (mv) mv.onclick = async () => { const now = Date.now(); renderMe.taps = now - (renderMe.tapAt || 0) < 1500 ? (renderMe.taps || 0) + 1 : 1; renderMe.tapAt = now; if (renderMe.taps < 7 || DEV) return; renderMe.taps = 0;
-    const code = await ask({ title: '테스트 메뉴', input: '암호', value: '', yes: '확인', no: '취소' }); if (!code) return; if (devHash(code) !== cfg.devKey) { toast('암호가 맞지 않아요'); return; }
-    DEV = true; localStorage.setItem('lm-dev', 'true'); cfg.testMode = true; LS.set('lm-test', true); renderMe(); mapS.refresh(); toast('테스트 모드 켜짐 · 내 정보에서 끌 수 있어요'); };
   const tm = $('#meTest'); if (tm) tm.onclick = async () => { const on = !cfg.testMode; if (!(await ask({ title: on ? '테스트 모드를 켤까요?' : '테스트 모드를 끌까요?', text: on ? '어디서나 도장이 찍혀요. 개발 중에만 쓰세요.' : '인증 반경 안에서만 도장이 찍혀요.', yes: on ? '켜기' : '끄기', no: '취소' }))) return; cfg.testMode = on; LS.set('lm-test', on); renderMe(); mapS.refresh(); toast(on ? '테스트 모드 켜짐' : '테스트 모드 꺼짐'); };
 }
 /* 뱃지 전체 화면 */
@@ -1006,6 +1003,11 @@ async function loginNudge() { if (!window.Cloud.ready || window.Cloud.signedIn()
   const n = Object.keys(allSeen()).length; if (n < 3) return; const last = LS.get('lm-loginask', null); if (last && (Date.now() - last.at < 7 * 86400000 || n <= last.n)) return;
   LS.set('lm-loginask', { at: Date.now(), n });
   if (await ask({ title: '기록을 안전하게 보관할까요?', text: `다녀온 곳 ${n}곳이 이 폰에만 있어요. 폰을 바꾸거나 앱을 지우면 사라져요.\n로그인하면 서버에 보관돼요.`, yes: '로그인', no: '나중에' })) pickLogin(); }
+/* 숨은 문: 지도 위쪽의 '랜드마크' 글자를 빠르게 10번 누르고 암호를 넣으면 테스트 메뉴가 열린다 (로그인 전에도 쓸 수 있게 지도에 둔다) */
+{ let taps = 0, tapAt = 0; const br = document.querySelector('header.top .brand'); if (br) br.addEventListener('click', async () => { const now = Date.now(); taps = now - tapAt < 1500 ? taps + 1 : 1; tapAt = now; if (taps < 10) return; taps = 0;
+    if (DEV) { cfg.testMode = !cfg.testMode; LS.set('lm-test', cfg.testMode); if (!screens.me.hidden) renderMe(); mapS.refresh(); toast(cfg.testMode ? '테스트 모드 켜짐' : '테스트 모드 꺼짐'); return; } /* 이미 문을 연 폰은 10번 누를 때마다 켜고 끈다 */
+    const code = await ask({ title: '테스트 메뉴', input: '암호', value: '', yes: '확인', no: '취소' }); if (!code) return; if (devHash(code) !== cfg.devKey) { toast('암호가 맞지 않아요'); return; }
+    DEV = true; localStorage.setItem('lm-dev', 'true'); cfg.testMode = true; LS.set('lm-test', true); if (!screens.me.hidden) renderMe(); mapS.refresh(); toast('테스트 모드 켜짐 · 내 정보에서 끌 수 있어요'); }); }
 setTimeout(() => loginNudge().catch(() => {}), 5000);
 setTimeout(() => checkFound().catch(() => {}), 6000); document.addEventListener('cloud-auth', () => setTimeout(() => checkFound().catch(() => {}), 3000));
 })();
