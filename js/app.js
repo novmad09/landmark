@@ -203,18 +203,27 @@ function emailLogin() {
     catch (e) { toast('로그인하지 못했어요. 다시 시도해 주세요'); go.disabled = false; }
   };
 }
-function requireLogin() {
+/* 도장은 이름을 묻지 않는다(이름은 자동). 약관 동의가 아직이면 동의만 받는다.
+   이름은 남에게 보이는 것(사진·가이드)을 처음 올릴 때 한 번 정한다: opts.name */
+function requireLogin(opts) {
+  const wantName = !!(opts && opts.name);
+  const askName = () => new Promise(res => { const u = store.getUser(); if (!wantName || !u || LS.get('lm-named', false)) return res(true);
+    const el = document.createElement('div'); el.className = 'login';
+    el.innerHTML = `<div class="box"><h2>이름을 정해 주세요</h2><p>올린 사진과 가이드에 이 이름이 보여요. 나중에 내 정보에서 바꿀 수 있어요.</p><input id="nick" type="text" maxlength="14" placeholder="예: 여행하는 김씨" autocomplete="nickname" value="${esc(u.nickname || '')}"><button class="btn primary" id="go" type="button">이 이름으로 올리기</button><button class="btn ghost" id="no" type="button">취소</button></div>`;
+    document.getElementById('app').appendChild(el); const inp = el.querySelector('#nick');
+    const go = () => { const c = window.Store.Safety.clean(inp.value.trim().slice(0, 14)); if (!c) { toast('쓸 수 없는 이름이에요'); inp.focus(); return; } const nu = { ...u, nickname: c }; LS.set('lm-user', nu); store.user = nu; LS.set('lm-named', true); el.remove(); try { if (window.Cloud.signedIn()) window.Cloud.sync(); } catch (e) {} res(true); };
+    el.querySelector('#go').onclick = go; inp.onkeydown = e => { if (e.key === 'Enter') go(); }; el.querySelector('#no').onclick = () => { el.remove(); res(false); }; });
   return new Promise(async res => {
-    if (store.getUser()) return res(true);
-    if (store.mode === 'local' && LS.get('lm-agreed', null)) { const n = randomNick(); await store.signIn(n); toast(`${n}님, 반가워요!`); return res(true); } /* 약관은 온보딩에서 동의했으니 바로 */
+    if (store.getUser()) return res(await askName());
+    if (store.mode === 'local' && LS.get('lm-agreed', null)) { const n = randomNick(); await store.signIn(n); if (!wantName) toast(`${n}님, 반가워요!`); return res(await askName()); } /* 약관은 온보딩에서 동의했으니 바로 */
     const el = document.createElement('div'); el.className = 'login';
     el.innerHTML = store.mode === 'local'
-      ? `<div class="box"><h2>이름을 정해 주세요</h2><p>도장과 사진에 이 이름이 보여요.</p><input id="nick" type="text" maxlength="14" placeholder="예: 여행하는 김씨" autocomplete="nickname" value="${randomNick()}"><label class="chk"><input type="checkbox" id="agree"> <span><a href="legal/terms.html" target="_blank" rel="noopener">이용약관</a>과 <a href="legal/privacy.html" target="_blank" rel="noopener">개인정보처리방침</a>에 동의해요</span></label><button class="btn primary" id="go" type="button">시작하기</button><button class="btn ghost" id="no" type="button">나중에</button></div>`
+      ? `<div class="box"><h2>시작하기 전에</h2><p>도장을 찍으려면 약관 동의가 필요해요. 이름은 자동으로 정해지고, 나중에 바꿀 수 있어요.</p><label class="chk"><input type="checkbox" id="agree"> <span><a href="legal/terms.html" target="_blank" rel="noopener">이용약관</a>과 <a href="legal/privacy.html" target="_blank" rel="noopener">개인정보처리방침</a>에 동의해요</span></label><button class="btn primary" id="go" type="button">동의하고 시작하기</button><button class="btn ghost" id="no" type="button">나중에</button></div>`
       : `<div class="box"><h2>로그인</h2><p>도장을 찍고 사진을 올리려면 로그인이 필요해요.</p><button class="btn kakao" id="kakao" type="button">카카오로 계속하기</button><button class="btn apple" id="apple" type="button">Apple로 계속하기</button><button class="btn ghost" id="no" type="button">나중에</button></div>`;
     document.getElementById('app').appendChild(el);
     const done = v => { el.remove(); res(v); };
     el.querySelector('#no').onclick = () => done(false);
-    if (store.mode === 'local') { const inp = el.querySelector('#nick'); setTimeout(() => inp.focus(), 50); const go = async () => { const n = inp.value.trim(); if (!n) { inp.focus(); return; } if (!el.querySelector('#agree').checked) { toast('약관에 동의해 주세요'); return; } const bad = window.Store.Safety.clean(n) === null; if (bad) { toast('그 이름은 쓸 수 없어요'); return; } LS.set('lm-agreed', new Date().toISOString()); await store.signIn(n); toast(`${n}님, 환영해요`); done(true); }; el.querySelector('#go').onclick = go; inp.onkeydown = e => { if (e.key === 'Enter') go(); }; }
+    if (store.mode === 'local') { el.querySelector('#go').onclick = async () => { if (!el.querySelector('#agree').checked) { toast('약관에 동의해 주세요'); return; } LS.set('lm-agreed', new Date().toISOString()); const n = randomNick(); await store.signIn(n); if (!wantName) toast(`${n}님, 반가워요!`); el.remove(); res(await askName()); }; }
     else { el.querySelector('#kakao').onclick = () => store.signIn('kakao').catch(e => toast(e.message)); el.querySelector('#apple').onclick = () => store.signIn('apple').catch(e => toast(e.message)); }
   });
 }
@@ -656,7 +665,7 @@ $('#gdSort').value = G.sort;
 $('#gdQ').oninput = e => { G.q = e.target.value; renderGuide(); }; $('#gdSort').onchange = e => { G.sort = e.target.value; renderGuide(); };
 $('#gdFilterBtn').onclick = () => { $('#gdFilters').hidden = !$('#gdFilters').hidden; renderGuide(); };
 /* 내 여행 중에서 골라 가이드로 올린다 */
-$('#gdUpBtn').onclick = async () => { if (!(await requireLogin())) return; const stamps = allSeen(); const mine = Trips.all().filter(t => t.kind === 'trip' && t.ids.some(id => stamps[id]));
+$('#gdUpBtn').onclick = async () => { if (!(await requireLogin({ name: true }))) return; const stamps = allSeen(); const mine = Trips.all().filter(t => t.kind === 'trip' && t.ids.some(id => stamps[id]));
   if (!mine.length) { toast('먼저 다녀온 곳으로 여행을 만들어 주세요', { action: '만들기', onAction: () => { DG.view = 'mine'; showTab('dogam'); } }); return; }
   const el = document.createElement('div'); el.className = 'login pick';
   el.innerHTML = `<div class="box"><h2>어떤 여행을 올릴까요?</h2><div class="picklist">${mine.map(t => `<button type="button" class="pk" data-t="${t.id}"><b>${esc(t.name)}</b><small>${t.ids.length}곳 · ${t.doneAt ? dotDate(t.doneAt) : ''}</small></button>`).join('')}</div><button class="btn ghost" type="button" id="pkNo">취소</button></div>`;
@@ -777,7 +786,7 @@ function openDoc(url, title) { const el = document.createElement('div'); el.clas
 document.addEventListener('click', e => { const a = e.target.closest('a[href^="legal/"]'); if (!a) return; e.preventDefault(); openDoc(a.getAttribute('href'), a.textContent.trim()); });
 document.addEventListener('click', e => { const a = e.target.closest('a[data-route]'); if (!a) return; const p = byId(a.dataset.route); if (!p) return; e.preventDefault(); routePick(p); });
 function pickPhoto(id) {
-  (async () => { if (!(await requireLogin())) return; const p = byId(id);
+  (async () => { if (!(await requireLogin({ name: true }))) return; const p = byId(id);
     { const u = store.getUser(), t = kstToday(); /* 고르기 전에 먼저 알려 준다: 한 명소에 하루 한 장 */
       if (u && store.photosOf(id).some(x => x.userId === u.id && window.Store.kstDate(x.createdAt) === t)) { toast('이 명소에는 오늘 이미 사진을 올렸어요. 내일 또 올려 주세요'); return; } }
     const dataUrl = await window.PhotoEditor.run({ place: p, maxEdge: cfg.photoMaxEdge, date: kstToday().replaceAll('-', '.'), toast }); if (!dataUrl) { await awardBadges(); await askNotify(); return; }
@@ -841,7 +850,7 @@ function renderMe() {
       <div class="legal"><a href="legal/terms.html" target="_blank" rel="noopener">이용약관</a> · <a href="legal/privacy.html" target="_blank" rel="noopener">개인정보처리방침</a> · <a href="legal/delete.html" target="_blank" rel="noopener">삭제 안내</a><span class="ver" id="meVer">v${cfg.version || '0'}${cfg.testMode ? ' · 테스트' : ''}</span></div>
       <div class="row2"><button class="btn ghost" id="out" type="button">${store.mode === 'local' ? '이름 바꾸기' : '로그아웃'}</button><button class="btn ghost danger" id="wipe" type="button">${window.Cloud.signedIn() ? '탈퇴 · 기록 삭제' : '기록 삭제'}</button></div>${credit}`
     : `<h2>${store.mode === 'local' ? '반가워요!' : '로그인해 주세요'}</h2><p class="note">${store.mode === 'local' ? '이름은 첫 도장을 찍을 때 자동으로 생겨요. 지금 정해도 돼요.' : '도장을 찍으려면 로그인이 필요해요.'}</p><button class="btn primary" id="in" type="button">${store.mode === 'local' ? '이름 정하기' : '로그인'}</button><button type="button" class="recentb" id="meBadges2"><span class="rb-t">뱃지 ${badges.length}개 보기 ›</span></button><div class="melist">${window.Cloud.ready ? `<button type="button" class="meCloud"><span>☁️ ${window.Cloud.signedIn() ? `${loginName(window.Cloud.provider())} 계정 연결됨` : '로그인'}</span><small>${window.Cloud.signedIn() ? `${window.Cloud.email() ? esc(window.Cloud.email()) + ' · ' : ''}기록이 서버에 보관돼요` : '기록을 서버에 보관해요. 폰을 바꿔도 남아요'}</small></button>` : ''}<button type="button" id="meMem"><span>📷 사진첩에서 다녀온 곳 찾기</span><small>${window.Memory.count() ? `사진 ${window.Memory.count()}장 · 명소 ${Object.keys(window.Memory.places()).length}곳` : '지난 여행 사진으로 다녀온 곳을 찾아요'}</small></button></div>${window.Memory.count() ? '<button class="btn ghost danger small" id="wipe" type="button">기록 모두 삭제</button>' : ''}<div class="legal"><a href="legal/terms.html" target="_blank" rel="noopener">이용약관</a> · <a href="legal/privacy.html" target="_blank" rel="noopener">개인정보처리방침</a></div>${credit}`;
-  const rename = async () => { const u = store.getUser(); const n = await ask({ title: '이름 바꾸기', input: '새 이름', value: u ? u.nickname : '', yes: '바꾸기', no: '취소' }); if (!n) return; const c = window.Store.Safety.clean(n.trim().slice(0, 14)); if (!c) { toast('쓸 수 없는 이름이에요'); return; } LS.set('lm-user', { ...u, nickname: c }); store.user = { ...u, nickname: c }; renderMe(); toast('이름을 바꿨어요'); try { if (window.Cloud.signedIn()) window.Cloud.sync(); } catch (e) {} };
+  const rename = async () => { const u = store.getUser(); const n = await ask({ title: '이름 바꾸기', input: '새 이름', value: u ? u.nickname : '', yes: '바꾸기', no: '취소' }); if (!n) return; const c = window.Store.Safety.clean(n.trim().slice(0, 14)); if (!c) { toast('쓸 수 없는 이름이에요'); return; } LS.set('lm-user', { ...u, nickname: c }); store.user = { ...u, nickname: c }; LS.set('lm-named', true); renderMe(); toast('이름을 바꿨어요'); try { if (window.Cloud.signedIn()) window.Cloud.sync(); } catch (e) {} };
   const nm = $('#meName'); if (nm) nm.onclick = rename;
   const out = $('#out'); if (out) out.onclick = async () => { if (store.mode === 'local') return rename(); await store.signOut(); renderMe(); mapS.refresh(); toast('로그아웃했어요'); };
   const inb = $('#in'); if (inb) inb.onclick = async () => { await requireLogin(); renderMe(); };
