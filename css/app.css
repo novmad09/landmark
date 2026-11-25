@@ -398,6 +398,8 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid var(-
 
 /* ---------- 토스트 버튼 · 대화상자 · 휴지통 · 가이드 탭 ---------- */
 .toast.act{pointer-events:none;width:max-content;min-width:72%;max-width:92%;display:flex;align-items:center;gap:12px;white-space:normal;text-align:left;border-radius:14px;padding:10px 10px 10px 16px}
+/* 사라진 안내의 버튼은 눌리지 않아야 한다. 안 보이는 채로 남아 그 자리의 다른 버튼(도장 뒤 '사진 남기기')을 가로막았다 */
+.toast:not(.show) button{pointer-events:none!important}
 .toast button{pointer-events:auto;flex:none;font:inherit;font-weight:700;font-size:14px;color:#8FB1FF;background:rgba(255,255,255,.1);border:0;border-radius:999px;padding:7px 12px;cursor:pointer}
 .ask .box p{margin:0;font-size:15px;line-height:1.5;color:var(--ink-soft)}
 .ask .box input{font:inherit;font-size:17px;padding:13px 14px;border-radius:12px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink)}
