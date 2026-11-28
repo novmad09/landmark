@@ -81,8 +81,8 @@ const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&a
 const L = window.LANDMARKS || [], placeName = id => { const p = L.find(x => x.id === id); return p ? p.name : id; };
 const kst = iso => iso ? new Date(new Date(iso).getTime() + 9 * 3600e3).toISOString().slice(0, 16).replace('T', ' ') : '';
 const num = n => Number(n || 0).toLocaleString();
-const VIEWS = [['home', '한눈에 보기'], ['reports', '신고'], ['suggestions', '명소 제안'], ['fixes', '수정 제안'], ['feedback', '문의'], ['users', '사용자'], ['photos', '올라온 사진']];
-const S = { view: (location.hash.slice(1) || 'home'), stats: {}, lists: {}, users: [], recent: [], showDone: false, q: '', uf: 'all', user: null, sort: { k: 'created_at', d: -1 }, more: 200 };
+const VIEWS = [['home', '한눈에 보기'], ['reports', '신고'], ['suggestions', '명소 제안'], ['fixes', '수정 제안'], ['feedback', '문의'], ['users', '사용자'], ['photos', '올라온 사진'], ['guides', '가이드']];
+const S = { view: (location.hash.slice(1) || 'home'), stats: {}, lists: {}, users: [], recent: [], showDone: false, gall: [], gtext: '', gprev: null, q: '', uf: 'all', user: null, sort: { k: 'created_at', d: -1 }, more: 200 };
 if (!VIEWS.some(v => v[0] === S.view)) S.view = 'home';
 
 const toast = m => { const d = document.createElement('div'); d.className = 'toast'; d.textContent = m; document.body.appendChild(d); setTimeout(() => d.remove(), 3200); };
@@ -97,6 +97,7 @@ if (!isAdmin) { gate(`<p>이 계정(${esc(me.email)})은 관리자가 아니에�
 const inbox = t => sb.from(t).select('*').order('created_at', { ascending: false }).limit(300);
 async function load() {
   const [st, rp, sg, fx, fb, us, ph, op] = await Promise.all([sb.rpc('admin_stats'), inbox('reports'), inbox('suggestions'), inbox('fixes'), inbox('feedback'), sb.rpc('admin_users'), sb.from('photos').select('*').order('created_at', { ascending: false }).limit(90), sb.from('admin_log').select('actor,created_at').eq('action', 'admin_open').order('created_at', { ascending: false }).limit(6)]);
+  { const ga = await sb.from('guides').select('id,user_id,nickname,title,data,like_count,report_count,hidden,created_at,updated_at').order('created_at', { ascending: false }).limit(1000); S.gall = ga.data || []; }
   S.opens = op.data || []; S.err = (st.error || us.error || {}).message; S.stats = st.data || {}; S.users = us.data || []; S.recent = ph.data || [];
   S.lists = { reports: rp.data || [], suggestions: sg.data || [], fixes: fx.data || [], feedback: fb.data || [] };
   const pids = [...new Set(S.lists.reports.filter(r => r.target_type === 'photo' && /^[0-9]+$/.test(r.target_id)).map(r => +r.target_id))], gids = [...new Set(S.lists.reports.filter(r => r.target_type === 'guide').map(r => r.target_id))];
@@ -112,10 +113,12 @@ function render() { const w = S.stats.wait || {}, cnt = { reports: w.reports, su
     ${VIEWS.map(([k, t], i) => `${i === 1 ? '<div class="sep">받은 것</div>' : i === 5 ? '<div class="sep">살펴보기</div>' : ''}<button class="nav" data-act="nav" data-id="${k}" aria-current="${S.view === k}">${t}${cnt[k] ? `<i>${cnt[k]}</i>` : ''}</button>`).join('')}
     <div class="who">${esc(me.email)}<br><button class="btn s" data-act="out">로그아웃</button></div></aside>
   <main><div class="head"><div><h1>${VIEWS.find(v => v[0] === S.view)[1]}</h1><p>${S.loaded ? kst(S.loaded.toISOString()).slice(11) + ' 기준' : ''}${S.err ? ' · 일부를 불러오지 못했어요: ' + esc(S.err) : ''}</p></div><button class="btn" data-act="reload">새로고침</button></div>${view()}</main></div>`;
+  const gp = root.querySelector('#gpaste'); if (gp) gp.oninput = () => { S.gtext = gp.value; };
+  const gf = root.querySelector('#gfile'); if (gf) gf.onchange = async () => { const f = gf.files[0]; if (!f) return; S.gtext = (await f.text()).replace(/^\uFEFF/, ''); S.gprev = parseGuides(S.gtext); render(); };
   const q = root.querySelector('#q'); if (q) q.oninput = () => { S.q = q.value; root.querySelector('#ulist').innerHTML = userRows(); };
 }
 
-function view() { const v = S.view; if (v === 'home') return home(); if (v === 'users') return users(); if (v === 'photos') return photos();
+function view() { const v = S.view; if (v === 'home') return home(); if (v === 'users') return users(); if (v === 'photos') return photos(); if (v === 'guides') return guidesView();
   const done = v === 'feedback' ? '' : `<div class="tools"><label class="note"><input type="checkbox" data-act="done" ${S.showDone ? 'checked' : ''}> 처리한 것도 보기</label></div>`;
   return done + (v === 'reports' ? reports() : v === 'suggestions' ? suggestions() : v === 'fixes' ? fixes() : feedback()); }
 
@@ -170,6 +173,55 @@ function users() { const c = k => S.users.filter(UF[k]).length, kinds = [...new 
 const phCard = (p, withUser) => `<div class="ph"><img src="${esc(p.url)}" alt="" loading="lazy"><div><b>${esc(placeName(p.place_id))}</b>${withUser ? uLink(p.user_id, p.nickname) + ' · ' : ''}${kst(p.created_at).slice(5)}${p.hidden ? '<span class="pill y">숨김</span>' : ''}${p.report_count ? `<span class="pill r">신고 ${p.report_count}</span>` : ''}<div class="acts"><button class="btn s d" data-act="ph-strike" data-id="${p.id}">삭제+경고</button><button class="btn s" data-act="ph-del" data-id="${p.id}">삭제만</button></div></div></div>`;
 function photos() { return S.recent.length ? `<div class="grid">${S.recent.map(p => phCard(p, true)).join('')}</div><p class="note" style="margin-top:12px">최근 올라온 90장까지 보여요.</p>` : '<p class="empty">올라온 사진이 없어요.</p>'; }
 
+/* ── 가이드: 표로 한꺼번에 올리고 관리 ── */
+const GCOLS = ['가이드 제목', '지역', '이동수단', '걸리는 시간(시간)', '한마디 팁', '명소', '명소 메모', '머무는 시간', '다음 장소까지 수단', '다음 장소까지 가는 법', '이동 시간(분)'];
+const GMODES = ['도보', '자차', '대중교통', '기타'], GSUBS = ['버스', '지하철', '기차', '택시'];
+const isOp = g => /^op-/.test(g.id), opGuides = () => S.gall.filter(isOp);
+const authorName = () => { const g = opGuides()[0]; let v = ''; try { v = localStorage.getItem('lmk-admin-author') || ''; } catch (e) {} return (g && g.nickname) || v || '랜드마크'; };
+const gid = title => { let h = 5381; for (const c of title.replace(/\s+/g, '')) h = ((h * 33) ^ c.codePointAt(0)) >>> 0; return 'op-' + h.toString(36); };
+const nrm = s => String(s || '').replace(/\s+/g, '').toLowerCase();
+const findPlace = v => { const k = nrm(v); if (!k) return { err: '명소 칸이 비었어요' }; const hit = L.find(p => nrm(p.name) === k || nrm(p.id) === k); if (hit) return { p: hit }; const near = L.filter(p => nrm(p.name).includes(k) || k.includes(nrm(p.name))).slice(0, 4); if (near.length === 1) return { p: near[0], guess: true }; return { err: `'${v}' 명소를 찾지 못했어요` + (near.length ? ` (비슷한 곳: ${near.map(p => p.name).join(', ')})` : '') }; };
+function table(text) { const d = text.includes('\t') ? '\t' : ','; const rows = []; let row = [], cell = '', q = false;
+  for (let i = 0; i < text.length; i++) { const c = text[i];
+    if (q) { if (c === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += c; }
+    else if (c === '"' && cell === '') q = true; else if (c === d) { row.push(cell); cell = ''; } else if (c === '\n' || c === '\r') { if (c === '\r' && text[i + 1] === '\n') i++; row.push(cell); rows.push(row); row = []; cell = ''; } else cell += c; }
+  row.push(cell); rows.push(row); return rows.map(r => r.map(x => x.trim())).filter(r => r.some(x => x)); }
+function parseGuides(text) { const rows = table(text || ''); if (rows.length && /제목/.test(rows[0][0])) rows.shift(); const out = []; let g = null;
+  rows.forEach(r => { const [title, region, transport, hours, tip, place, note, stay, lmode, ltext, lmins] = r;
+    if (title) { g = { title, region: region || '', transport: transport || '', hours: hours || '', tip: tip || '', stops: [], legs: [], errs: [], warns: [] }; out.push(g); }
+    if (!g) return; if (!place && !title) return; const f = findPlace(place); if (f.err) { g.errs.push(f.err); return; } if (f.guess) g.warns.push(`'${place}' → ${f.p.name}(으)로 읽었어요`);
+    g.stops.push({ id: f.p.id, note: note || '', stay: stay || '' }); g.legs.push(lmode || ltext || lmins ? { m: lmode || '', text: ltext || '', mins: lmins || '' } : null); });
+  out.forEach(g => { g.id = gid(g.title); if (g.title.length > 60) g.errs.push(`제목이 ${g.title.length}자예요 (60자까지)`); if (g.stops.length < 2 && !g.errs.length) g.errs.push('명소가 2곳 이상 있어야 해요');
+    if (g.transport && !['자차', '대중교통', '도보'].includes(g.transport)) g.errs.push(`이동수단은 자차·대중교통·도보 중 하나로 적어 주세요 ('${g.transport}')`);
+    if (g.hours && !(Number(g.hours) > 0)) g.errs.push(`걸리는 시간은 숫자로 적어 주세요 ('${g.hours}')`);
+    if (new Set(g.stops.map(s => s.id)).size < g.stops.length) g.errs.push('같은 명소가 두 번 들어 있어요');
+    const last = g.legs.pop(); if (last && (last.text || last.mins)) g.warns.push('마지막 명소의 이동 칸은 쓰지 않아요');
+    g.legs = g.legs.map(l => { l = l || { m: '', text: '', mins: '' }; const m = l.m; let mode, sub; if (GSUBS.includes(m)) { mode = '대중교통'; sub = m; } else if (GMODES.includes(m)) mode = m; else if (!m) mode = g.transport || '자차'; else { g.errs.push(`다음 장소까지 수단은 도보·자차·대중교통·버스·지하철·기차·택시·기타 중 하나예요 ('${m}')`); mode = '기타'; }
+      const o = { mode, text: l.text }; if (sub) o.sub = sub; if (Number(l.mins) > 0) o.mins = Number(l.mins); return o; });
+    g.dup = out.filter(x => x.id === g.id).length > 1; if (g.dup) g.errs.push('같은 제목이 표에 두 번 있어요 (이어지는 줄은 제목 칸을 비워 두세요)');
+    g.exists = S.gall.some(x => x.id === g.id); });
+  return out; }
+const csvCell = v => { v = String(v == null ? '' : v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+function guideRows(list) { const rows = [GCOLS]; list.forEach(g => { const d = g.data || {}, st = d.stops || [], lg = d.legs || [];
+    st.forEach((s, i) => { const l = lg[i]; rows.push([i ? '' : g.title, i ? '' : d.region || '', i ? '' : d.transport || '', i ? '' : d.hours || '', i ? '' : d.tip || '', placeName(s.id), s.note || '', s.stay || '', l ? (l.sub || l.mode || '') : '', l ? l.text || '' : '', l && l.mins ? l.mins : '']); }); }); return rows; }
+function saveFile(name, rows) { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['﻿' + rows.map(r => r.map(csvCell).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' })); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); }
+const GSAMPLE = [{ title: '경주 하루 (불국사 → 석굴암 → 대릉원)', data: { region: '경북 경주', transport: '자차', hours: 7, tip: '불국사는 아침 일찍 가면 한산해요', stops: [{ id: 'bgs', note: '청운교·백운교 앞이 사진 자리', stay: '1시간30분' }, { id: 'sga', note: '주차장에서 걸어서 15분', stay: '40분' }, { id: 'drw', note: '해질녘 산책 뒤 황리단길에서 저녁', stay: '2시간' }], legs: [{ mode: '자차', text: '석굴로 따라 15분', mins: 15 }, { mode: '자차', text: '시내 방면 30분, 대릉원 공영주차장', mins: 30 }] } }];
+function guideCard(g) { const d = g.data || {}, st = d.stops || []; return `<div class="item"><div class="top"><span>${isOp(g) ? '<span class="pill g" style="margin-left:0">운영자</span> ' : ''}${isOp(g) ? esc(g.nickname || '') : uLink(g.user_id, g.nickname)} · 추천 ${g.like_count}${g.report_count ? ` · 신고 ${g.report_count}` : ''}${g.hidden ? '<span class="pill y">숨김</span>' : ''}</span><span>${kst(g.updated_at || g.created_at)}</span></div><h3>${esc(g.title)}</h3><p class="note">${esc([d.region, st.length + '곳', d.hours ? d.hours + '시간' : '', d.transport].filter(Boolean).join(' · '))}</p><p>${st.map((s, i) => `${i + 1}. ${esc(placeName(s.id))}`).join('  →  ')}</p>${d.tip ? `<p class="note">${esc(d.tip)}</p>` : ''}
+    <div class="acts"><button class="btn s" data-act="gd-hide" data-id="${esc(g.id)}" data-type="${g.hidden ? 0 : 1}">${g.hidden ? '다시 보이기' : '숨기기'}</button>${isOp(g) ? `<button class="btn s d" data-act="gd-del" data-id="${esc(g.id)}">삭제</button>` : `<button class="btn s d" data-act="gd-strike" data-id="${esc(g.id)}">삭제+경고</button>`}</div></div>`; }
+function guidesView() { const ops = opGuides(), others = S.gall.filter(g => !isOp(g)), pv = S.gprev, ok = pv ? pv.filter(g => !g.errs.length) : [];
+  const prev = !pv ? '' : !pv.length ? '<p class="note" style="margin-top:12px">읽을 수 있는 줄이 없어요. 양식을 받아 그 모양대로 적어 주세요.</p>' : `<div style="margin-top:14px">${pv.map(g => `<div class="item" style="box-shadow:none"><div class="top"><span>${g.errs.length ? '<span class="pill r" style="margin-left:0">올릴 수 없음</span>' : g.exists ? '<span class="pill y" style="margin-left:0">덮어쓰기</span>' : '<span class="pill g" style="margin-left:0">새로 올림</span>'}</span><span>${esc([g.region, g.hours ? g.hours + '시간' : '', g.transport].filter(Boolean).join(' · '))}</span></div><h3>${esc(g.title)}</h3><p>${g.stops.map((s, i) => `${i + 1}. ${esc(placeName(s.id))}`).join('  →  ')}</p>${g.errs.map(e => `<p style="color:var(--acc)">· ${esc(e)}</p>`).join('')}${g.warns.map(e => `<p class="note">· ${esc(e)}</p>`).join('')}</div>`).join('')}
+    <div class="acts"><button class="btn p" data-act="gd-upload" ${ok.length ? '' : 'disabled'}>${ok.length}개 올리기</button>${pv.length > ok.length ? `<span class="note">고칠 것이 있는 ${pv.length - ok.length}개는 빼고 올려요</span>` : ''}<button class="btn" data-act="gd-clear">지우기</button></div></div>`;
+  return `<div class="panel"><b>작성자 표시 이름</b><p class="note" style="margin:4px 0 10px">운영자가 올린 가이드에 올린 사람으로 보이는 이름이에요. 바꾸면 이미 올린 ${ops.length}개에도 바로 적용돼요.</p><div class="acts" style="margin-top:0"><input type="text" id="gauth" maxlength="20" value="${esc(authorName())}" style="padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);width:200px"><button class="btn" data-act="gd-author">저장</button></div></div>
+  <h2>한꺼번에 올리기</h2><div class="panel"><p class="note" style="margin:0 0 10px">엑셀·구글 시트에 한 줄에 명소 하나씩 적어요. 같은 가이드의 둘째 줄부터는 제목 칸을 비워 두면 위 가이드에 이어져요. 표를 통째로 복사해 아래에 붙여 넣거나 CSV 파일을 고르세요. 같은 제목을 다시 올리면 내용만 바뀌고 추천 수는 그대로예요.</p>
+    <div class="tools"><button class="btn s" data-act="gd-tpl">양식 받기</button><button class="btn s" data-act="gd-export" ${ops.length ? '' : 'disabled'}>올린 가이드 ${ops.length}개 표로 받기</button><label class="btn s" style="cursor:pointer">CSV 파일 고르기<input type="file" id="gfile" accept=".csv,.tsv,.txt,text/csv" hidden></label></div>
+    <textarea id="gpaste" rows="7" placeholder="${esc(GCOLS.join('\t'))}" style="background:var(--bg);font-size:13px;white-space:pre;overflow:auto">${esc(S.gtext)}</textarea><div class="acts" style="margin-top:8px"><button class="btn" data-act="gd-preview">미리 보기</button></div>${prev}</div>
+  <h2>운영자 가이드 ${ops.length}</h2>${ops.length ? ops.map(guideCard).join('') + `<div class="acts"><button class="btn s d" data-act="gd-delall">운영자 가이드 ${ops.length}개 모두 삭제</button></div>` : '<p class="note">아직 없어요.</p>'}
+  <h2>사용자가 올린 가이드 ${others.length}</h2>${others.length ? others.map(guideCard).join('') : '<p class="note">아직 없어요.</p>'}`; }
+async function uploadGuides() { const list = (S.gprev || []).filter(g => !g.errs.length); if (!list.length) return 0; const nick = authorName(), old = Object.fromEntries(S.gall.map(g => [g.id, g]));
+  const rows = list.map(g => { const o = (old[g.id] || {}).data || {}; return { id: g.id, user_id: me.id, nickname: nick, title: g.title, updated_at: new Date().toISOString(),
+    data: { op: true, region: g.region, stops: g.stops, legs: g.legs, tip: g.tip, hours: Number(g.hours) || 0, transport: g.transport, completions: o.completions || 0, ratings: o.ratings || [] } }; });
+  const r = await sb.from('guides').upsert(rows, { onConflict: 'id' }); if (r.error) throw r.error; return rows.length; }
+
 const LOG = { block: '앱 이용 정지', ban_upload: '올리기 정지', unban: '정지 풀기', strike: '경고', strike_reset: '경고 지움', withdraw_self: '본인이 탈퇴', withdraw_cancel_self: '본인이 탈퇴 취소', withdraw_admin: '관리자가 탈퇴 처리', withdraw_cancel_admin: '관리자가 탈퇴 취소', purged: '완전 삭제' };
 async function openUser(id) { const u = userById(id); if (!u) return closeUser(); S.user = u;
   const [st, ph, gd, rp, lg] = await Promise.all([sb.from('stamps').select('place_id,day,kind').eq('user_id', id).order('day', { ascending: false }).limit(60), sb.from('photos').select('*').eq('user_id', id).order('created_at', { ascending: false }).limit(60), sb.from('guides').select('id,title,hidden,like_count,report_count,created_at').eq('user_id', id).order('created_at', { ascending: false }), sb.from('reports').select('reason,body,status,created_at').eq('target_type', 'user').eq('target_id', id), sb.from('admin_log').select('*').eq('user_id', id).order('created_at', { ascending: false }).limit(40)]);
@@ -219,6 +271,14 @@ async function act(b, e) { const a = b.dataset.act, id = b.dataset.id, upd = (t,
   else if (a === 'fb-del') { if (!await ask('이 문의를 지울까요?', '지우기')) return; res = await sb.from('feedback').delete().eq('id', id); }
   else if (a === 'ph-strike' || a === 'ph-del') { if (!await ask(a === 'ph-strike' ? '이 사진을 지울까요?\n' + STRIKE : '이 사진을 지울까요? (경고 없이 사진만 지워요)', '삭제', true)) return; await removePhoto(id, a === 'ph-strike'); msg = '사진을 지웠어요'; }
   else if (a === 'gd-hide') res = await upd('guides', { hidden: b.dataset.type === '1' });
+  else if (a === 'gd-tpl') { saveFile('랜드마크-가이드-양식.csv', guideRows(GSAMPLE)); return; }
+  else if (a === 'gd-export') { saveFile('랜드마크-가이드.csv', guideRows(opGuides().slice().reverse())); return; }
+  else if (a === 'gd-preview') { S.gtext = (document.getElementById('gpaste') || {}).value || ''; S.gprev = parseGuides(S.gtext); render(); return; }
+  else if (a === 'gd-clear') { S.gtext = ''; S.gprev = null; render(); return; }
+  else if (a === 'gd-upload') { const n = (S.gprev || []).filter(g => !g.errs.length), ow = n.filter(g => g.exists).length; if (!await ask(`가이드 ${n.length}개를 '${authorName()}' 이름으로 올릴까요?${ow ? `\n이미 있는 ${ow}개는 내용을 덮어써요.` : ''}\n올리면 앱의 가이드 목록에 바로 보여요.`, '올리기')) return; b.disabled = true; const c = await uploadGuides(); S.gtext = ''; S.gprev = null; msg = `${c}개를 올렸어요`; }
+  else if (a === 'gd-author') { const v = (document.getElementById('gauth').value || '').trim().slice(0, 20); if (!v) return toast('이름을 적어 주세요'); try { localStorage.setItem('lmk-admin-author', v); } catch (e) {} if (opGuides().length) res = await sb.from('guides').update({ nickname: v }).like('id', 'op-%'); msg = '이름을 저장했어요'; }
+  else if (a === 'gd-del') { if (!await ask('이 가이드를 지울까요? 받은 추천도 함께 사라져요.', '삭제', true)) return; res = await sb.from('guides').delete().eq('id', id); msg = '가이드를 지웠어요'; }
+  else if (a === 'gd-delall') { if (!await ask(`운영자 가이드 ${opGuides().length}개를 모두 지울까요?\n받은 추천도 함께 사라지고 되돌릴 수 없어요.`, '모두 삭제', true)) return; res = await sb.from('guides').delete().like('id', 'op-%'); msg = '모두 지웠어요'; }
   else if (a === 'gd-strike') { if (!await ask('이 가이드를 지울까요?\n' + STRIKE, '삭제하고 경고', true)) return; res = await sb.rpc('admin_resolve', { p_type: 'guide', p_id: id, p_remove: true }); }
   else if (a === 'ban') { const u = S.user, d = +id, full = b.dataset.full === '1', why = (document.getElementById('reason') || {}).value || null; if (u.id === me.id && d !== 0 && !await ask('지금 로그인한 본인 계정이에요. 그래도 할까요?', '계속', true)) return;
     if (!await ask(d === 0 ? `${u.nickname} 님의 정지를 모두 풀까요?` : `${u.nickname} 님을 ${d < 0 ? '기한 없이' : d + '일 동안'} ${full ? '앱 이용 정지' : '올리기 정지'}할까요?${full ? '\n앱을 열면 정지 화면만 보이게 돼요.' : ''}`, d === 0 ? '정지 풀기' : '정지', d !== 0)) return;
@@ -240,7 +300,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeUser();
 try { await sb.rpc('admin_sweep'); } catch (e) {} /* 접속 기록 + 기한 지난 탈퇴 계정 정리 */
 let lastAct = Date.now(); ['pointerdown', 'keydown', 'scroll'].forEach(ev => addEventListener(ev, () => { lastAct = Date.now(); }, { passive: true, capture: true }));
 setInterval(async () => { if (Date.now() - lastAct > 30 * 60000) { await sb.auth.signOut({ scope: 'local' }); location.reload(); } }, 30000); /* 30분 동안 손대지 않으면 자동 로그아웃 */
-await load(); setInterval(() => { if (!document.hidden && !document.querySelector('.sheet,.dlg') && !(document.activeElement && document.activeElement.tagName === 'INPUT')) load(); }, 120000);
+await load(); setInterval(() => { if (!document.hidden && !document.querySelector('.sheet,.dlg') && !(document.activeElement && ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) && !S.gprev) load(); }, 120000);
 })().catch(e => { document.getElementById('root').innerHTML = `<div class="gate"><p>관리 화면을 열지 못했어요.</p><p class="note">${String(e && e.message || e).replace(/</g, '&lt;')}</p></div>`; });
 </script>
 </body>
